@@ -34,7 +34,10 @@ class VinLookupResult {
 /// and local OEM workshop fastener/torque specifications.
 class CarInfoService {
   static Future<bool> openUrl(String url) async {
-    final uri = Uri.parse(url);
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+      return false;
+    }
     if (await canLaunchUrl(uri)) {
       return launchUrl(uri, mode: LaunchMode.externalApplication);
     }

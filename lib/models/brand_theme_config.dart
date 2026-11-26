@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 enum CarBrandId {
@@ -83,36 +84,56 @@ class BrandThemeConfig {
     this.defaultPowertrain = PowertrainType.gasoline,
   });
 
+  /// Builds an iPhone / iOS Cupertino-inspired dark Liquid-Glass Material+Cupertino theme
   ThemeData toMaterialTheme() {
+    const iosBlack = Color(0xFF000000);
+    const iosElevatedCard = Color(0xFF1C1C1E);
+
     final colorScheme = ColorScheme.dark(
       primary: primaryColor,
       secondary: secondaryColor,
-      surface: surfaceColor,
+      surface: iosBlack,
       onPrimary: Colors.white,
       onSecondary: Colors.white,
-      onSurface: const Color(0xFFF3F5F9),
+      onSurface: const Color(0xFFF5F5F7),
     );
 
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: surfaceColor,
-      cardColor: cardColor,
-      appBarTheme: AppBarTheme(
-        backgroundColor: surfaceColor.withValues(alpha: 0.94),
+      scaffoldBackgroundColor: iosBlack,
+      cardColor: iosElevatedCard,
+      splashFactory: NoSplash.splashFactory,
+      highlightColor: Colors.white.withValues(alpha: 0.06),
+      cupertinoOverrideTheme: CupertinoThemeData(
+        brightness: Brightness.dark,
+        primaryColor: primaryColor,
+        barBackgroundColor: const Color(0xB8161618),
+        scaffoldBackgroundColor: iosBlack,
+      ),
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        },
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
         elevation: 0,
+        scrolledUnderElevation: 0,
         centerTitle: false,
       ),
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: cardColor,
-        indicatorColor: primaryColor.withValues(alpha: 0.28),
-        labelTextStyle: WidgetStateProperty.all(
-          const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            overflow: TextOverflow.ellipsis,
+      cardTheme: CardThemeData(
+        color: iosElevatedCard,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: Colors.white.withValues(alpha: 0.09),
+            width: 0.65,
           ),
         ),
       ),
@@ -120,17 +141,37 @@ class BrandThemeConfig {
         style: FilledButton.styleFrom(
           backgroundColor: primaryColor,
           foregroundColor: Colors.white,
+          elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+          textStyle: const TextStyle(
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.2,
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Colors.white,
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: cardColor,
-        selectedColor: primaryColor.withValues(alpha: 0.26),
-        side: BorderSide(color: primaryColor.withValues(alpha: 0.35)),
-        labelStyle: const TextStyle(color: Colors.white, fontSize: 12),
+        backgroundColor: const Color(0xFF2C2C2E),
+        selectedColor: primaryColor.withValues(alpha: 0.30),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.10), width: 0.6),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+        labelStyle: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

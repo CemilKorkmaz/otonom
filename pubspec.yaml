@@ -1,7 +1,7 @@
 name: otonom
 description: "Otonom - Canlı Harita, GPS, OSRM Rota, Overpass Şarj/Benzin/Çekici, NHTSA & EPA API Bağlantılı Otomobil Süper Uygulaması"
 publish_to: 'none'
-version: 1.2.0+3
+version: 1.3.0+4
 
 environment:
   sdk: '>=3.3.0 <4.0.0'

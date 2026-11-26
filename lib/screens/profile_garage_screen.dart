@@ -4,6 +4,7 @@ import '../models/brand_theme_config.dart';
 import '../models/user_garage_vehicle.dart';
 import '../state/app_state.dart';
 import '../widgets/brand_emblem.dart';
+import '../widgets/ios_liquid_glass.dart';
 
 class ProfileGarageScreen extends StatefulWidget {
   final OtonomAppState appState;
@@ -64,13 +65,8 @@ class _ProfileGarageScreenState extends State<ProfileGarageScreen> {
   }
 
   Future<void> _openAddWorldVehicleSheet() async {
-    final added = await showModalBottomSheet<UserGarageVehicle>(
+    final added = await showIosGlassBottomSheet<UserGarageVehicle>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF0E1420),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-      ),
       builder: (ctx) => _AddWorldVehicleSheet(appState: widget.appState),
     );
 
@@ -101,26 +97,13 @@ class _ProfileGarageScreenState extends State<ProfileGarageScreen> {
     final statuses = widget.appState.liveApis.statuses.values.toList();
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 110),
       children: [
-        // 1. Personal Garage Header & Add Any Car CTA
-        Container(
+        // 1. Personal Garage Header & Add Any Car CTA (iOS Liquid Glass)
+        IosLiquidGlassSurface(
+          borderRadius: 24,
+          tintColor: brand.primaryColor,
           padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                brand.primaryColor.withValues(alpha: 0.30),
-                const Color(0xFF121824),
-              ],
-            ),
-            border: Border.all(
-              color: brand.primaryColor.withValues(alpha: 0.55),
-              width: 1.4,
-            ),
-          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -186,6 +169,10 @@ class _ProfileGarageScreenState extends State<ProfileGarageScreen> {
             ],
           ),
         ),
+        if (activeCar != null) ...[
+          const SizedBox(height: 14),
+          _IosGarageWidgetsGrid(vehicle: activeCar, brand: brand),
+        ],
         const SizedBox(height: 20),
 
         // 2. User's Own Vehicles (Zero hardcoded sample vehicles!)
@@ -1013,6 +1000,195 @@ class _AddWorldVehicleSheetState extends State<_AddWorldVehicleSheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// iPhone WidgetKit-inspired 2x2 Quick Vehicle Health & Spec Tiles
+class _IosGarageWidgetsGrid extends StatelessWidget {
+  final UserGarageVehicle vehicle;
+  final BrandThemeConfig brand;
+
+  const _IosGarageWidgetsGrid({
+    required this.vehicle,
+    required this.brand,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = WorldBrandsEngineering.resolveProfile(vehicle.make);
+    final km = vehicle.odometerKm;
+    final interval = vehicle.powertrain.isElectric ? 30000 : 15000;
+    final nextServiceText = km != null
+        ? '${interval - (km % interval)} km sonra'
+        : 'Her ${interval ~/ 1000}.000 km';
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: IosGroupedCard(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '🔧 SONRAKİ BAKIM',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: brand.secondaryColor,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      nextServiceText,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      km != null ? 'Mevcut: $km km' : 'Sayaç girilmedi',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF8E8E93),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: IosGroupedCard(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '🔩 BİJON TORKU',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: brand.secondaryColor,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      profile.lugTorqueNm,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${profile.lugSocketMm} · ${profile.wheelPcd}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF8E8E93),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: IosGroupedCard(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '🛞 SOĞUK LASTİK',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: brand.secondaryColor,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      vehicle.powertrain.isElectric
+                          ? '2.6 – 2.9 Bar'
+                          : '2.3 – 2.5 Bar',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      vehicle.powertrain.isElectric
+                          ? '38–42 PSI (EV Ağırlığı)'
+                          : '33–36 PSI (Standart)',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF8E8E93),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: IosGroupedCard(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '🛢️ OEM SIVI KODU',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: brand.secondaryColor,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      profile.oilApprovalSpec.split('(').first.trim(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      profile.coolantSpec,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF8E8E93),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

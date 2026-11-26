@@ -69,27 +69,27 @@ jobs:
           set -o pipefail
           flutter test 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
 
-      - name: Build Installable Android Release APK (v1.2.0)
+      - name: Build Installable Android Release APK (v1.3.0)
         run: |
           flutter build apk --release
-          cp build/app/outputs/flutter-apk/app-release.apk otonom-v1.2.0-android.apk
-          ls -lh otonom-v1.2.0-android.apk
+          cp build/app/outputs/flutter-apk/app-release.apk otonom-v1.3.0-android.apk
+          ls -lh otonom-v1.3.0-android.apk
 
       - name: Upload APK Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: otonom-v1.2.0-android-apk
-          path: otonom-v1.2.0-android.apk
+          name: otonom-v1.3.0-android-apk
+          path: otonom-v1.3.0-android.apk
 
-      - name: Publish GitHub Release v1.2.0 with Direct APK Download
+      - name: Publish GitHub Release v1.3.0 with Direct APK Download
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if gh release view v1.2.0 >/dev/null 2>&1; then
-            gh release upload v1.2.0 otonom-v1.2.0-android.apk --clobber
+          if gh release view v1.3.0 >/dev/null 2>&1; then
+            gh release upload v1.3.0 otonom-v1.3.0-android.apk --clobber
           else
-            gh release create v1.2.0 otonom-v1.2.0-android.apk \
+            gh release create v1.3.0 otonom-v1.3.0-android.apk \
               --target "${{ github.sha }}" \
-              --title "Otonom v1.2.0 — Dünya Üzerindeki Her Aracı Eklenebilir Garaj, Derin Ansiklopedi, Koyu Harita & Birleşik Canlı POI Sürümü" \
-              --notes "Gerçek cihaz geri bildirimlerine göre v1.2.0 yenilikleri: (1) Harita Koyu Mod (Dark Mode) OpenStreetMap + GPU Kokpit Matrisi ile %100 kesintisiz çalışacak şekilde düzeltildi, (2) EV Şarj, Kiralama ve Çekici/Servis API'leri tekli hızlı Overpass node sorgusu + Photon Komoot OSM yedeklemesi ile birleştirilerek 429/504 hatası giderildi, (3) Alt menüdeki 'Çekici & 112' tek satır 'Acil' olarak güncellendi ve acil durum ikonu eklendi, (4) Garajım'daki örnek araçlar kaldırıldı; dünya üzerindeki herhangi bir marka, model, yıl ve paketteki aracı ekleme özelliği ve eklenen aracın Wikipedia görseli + 10 noktalı OEM cıvata/lokma/Nm tork tablosu + sıvı onay kodları + ekspertiz rehberi ile Ansiklopedi'de ultra detaylı gösterimi eklendi."
+              --title "Otonom v1.3.0 — Tam Ekran Turn-by-Turn Navigasyon, iPhone iOS Liquid-Glass Arayüz & ECC Denetimi" \
+              --notes "v1.3.0 yenilikleri: (1) Rota ekranında arama yapıp 'Rota Oluştur / Başlat' dendiğinde Google/Apple Haritalar tarzı %100 tam ekran, 17.3x yakınlaştırılmış, sürüş yönüne dönen (Heading-Up), canlı hız göstergeli (km/s), adım adım dönüş kartlı, otomatik yeniden rotalamalı ve canlı demo sürüş simülasyonlu Navigasyon Modu eklendi; (2) Tüm uygulama arayüzü iPhone / iOS Cupertino Liquid-Glass (buzlu cam BackdropFilter, yüzen kapsül alt bar, CupertinoSlidingSegmentedControl, elastik BouncingScrollPhysics ve dokunsal HapticFeedback) tasarım diline geçirildi; (3) affaan-m/ECC ajanlarıyla (flutter-reviewer, silent-failure-hunter, security-reviewer, liquid-glass-design) baştan aşağı kod/güvenlik denetimi yapılarak varsayılan nötr Otonom ikonu, HTTPS doğrulama, yarış durumu (race-condition) koruması ve HTTP bağlantı havuzu iyileştirmeleri tamamlandı."
           fi

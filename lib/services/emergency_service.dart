@@ -13,6 +13,7 @@ class EmergencyService {
 
   static Future<bool> dialPhoneNumber(String phone) async {
     final cleaned = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (cleaned.length < 3) return false;
     final uri = Uri(scheme: 'tel', path: cleaned);
     if (await canLaunchUrl(uri)) {
       return launchUrl(uri);
@@ -21,7 +22,10 @@ class EmergencyService {
   }
 
   static Future<bool> openExternalCarInfo(String url) async {
-    final uri = Uri.parse(url);
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+      return false;
+    }
     if (await canLaunchUrl(uri)) {
       return launchUrl(uri, mode: LaunchMode.externalApplication);
     }

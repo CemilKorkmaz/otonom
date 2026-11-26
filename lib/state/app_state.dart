@@ -10,11 +10,15 @@ import '../services/dynamic_icon_service.dart';
 import '../services/live_apis_service.dart';
 
 class OtonomAppState extends ChangeNotifier {
-  final LiveApisService liveApis = LiveApisService();
+  final LiveApisService liveApis;
 
-  // Personal Garage (starts completely clean — no hardcoded sample cars!)
+  OtonomAppState({LiveApisService? liveApisService})
+      : liveApis = liveApisService ?? LiveApisService();
+
+  // Personal Garage (starts completely clean — no hardcoded sample cars)
   final List<UserGarageVehicle> _garageVehicles = [];
   String? _activeGarageVehicleId;
+  int _dossierRequestId = 0;
 
   // Cached Deep Encyclopedia Dossier for the user's active car
   LiveWikipediaVehicleSummary? _activeWikiSummary;
@@ -32,6 +36,7 @@ class OtonomAppState extends ChangeNotifier {
   LatLng _destinationPoint = const LatLng(40.7654, 29.9408);
   String _destinationName = 'Kocaeli / Sapanca Otoyol Aksı';
   LiveOsrmRoute? _liveRoute;
+  String? _lastRouteError;
 
   List<LivePoiItem> _liveEvStations = [];
   List<LivePoiItem> _liveFuelStations = [];
@@ -46,6 +51,12 @@ class OtonomAppState extends ChangeNotifier {
   String _bloodType = 'A Rh (+)';
   String _emergencyContact = '';
   int _currentSocOrFuelPercent = 80;
+
+  @override
+  void dispose() {
+    liveApis.dispose();
+    super.dispose();
+  }
 
   List<UserGarageVehicle> get garageVehicles =>
       List.unmodifiable(_garageVehicles);
@@ -86,15 +97,17 @@ class OtonomAppState extends ChangeNotifier {
   LatLng get destinationPoint => _destinationPoint;
   String get destinationName => _destinationName;
   LiveOsrmRoute? get liveRoute => _liveRoute;
+  String? get lastRouteError => _lastRouteError;
 
   List<LivePoiItem> get liveRouteStations =>
       isElectricVehicle ? _liveEvStations : _liveFuelStations;
 
-  List<LivePoiItem> get liveEvStations => _liveEvStations;
-  List<LivePoiItem> get liveFuelStations => _liveFuelStations;
-  List<LivePoiItem> get liveTowRepairs => _liveTowRepairs;
-  List<LivePoiItem> get liveRentalPlaces => _liveRentalPlaces;
-  Set<String> get addedWaypointStationIds => _addedWaypointStationIds;
+  List<LivePoiItem> get liveEvStations => List.unmodifiable(_liveEvStations);
+  List<LivePoiItem> get liveFuelStations => List.unmodifiable(_liveFuelStations);
+  List<LivePoiItem> get liveTowRepairs => List.unmodifiable(_liveTowRepairs);
+  List<LivePoiItem> get liveRentalPlaces => List.unmodifiable(_liveRentalPlaces);
+  Set<String> get addedWaypointStationIds =>
+      Set.unmodifiable(_addedWaypointStationIds);
   bool get isLoadingLive => _isLoadingLive;
   bool get darkMapTiles => _darkMapTiles;
 
@@ -108,6 +121,12 @@ class OtonomAppState extends ChangeNotifier {
 
   int get onlineApiCount =>
       liveApis.statuses.values.where((s) => s.online).length;
+
+  void updateLivePositionFromNavigation(LatLng pt) {
+    _currentLocation = pt;
+    _locationSource = 'Canlı GPS Navigasyon';
+    notifyListeners();
+  }
 
   Future<void> loadSavedPreferences() async {
     try {
@@ -133,7 +152,9 @@ class OtonomAppState extends ChangeNotifier {
       if (activeGarageVehicle != null) {
         await refreshActiveVehicleEncyclopediaDossier();
       }
-    } catch (_) {}
+    } on Object {
+      // Safe fallback when SharedPreferences is unavailable
+    }
   }
 
   Future<void> _persistGarage() async {
@@ -150,7 +171,9 @@ class OtonomAppState extends ChangeNotifier {
       } else {
         await prefs.remove('active_garage_vehicle_id_v2');
       }
-    } catch (_) {}
+    } on Object {
+      // Non-fatal persistence error
+    }
   }
 
   Future<void> addGarageVehicle(UserGarageVehicle vehicle) async {
@@ -187,18 +210,19 @@ class OtonomAppState extends ChangeNotifier {
     }
     notifyListeners();
     await _persistGarage();
+    await DynamicIconService.setBrandAppIcon(brandTheme.dynamicIconKey);
     if (activeGarageVehicle != null) {
       await refreshActiveVehicleEncyclopediaDossier();
     }
   }
 
-  /// Pulls live Wikipedia photo/history, EPA specs, NHTSA recalls & complaints for the active car!
   Future<void> refreshActiveVehicleEncyclopediaDossier([
     UserGarageVehicle? customTarget,
   ]) async {
     final v = customTarget ?? activeGarageVehicle;
     if (v == null) return;
 
+    final reqId = ++_dossierRequestId;
     _isLoadingEncyclopediaDossier = true;
     notifyListeners();
 
@@ -218,23 +242,28 @@ class OtonomAppState extends ChangeNotifier {
         ),
       ]);
 
+      if (reqId != _dossierRequestId) return;
+
       _activeWikiSummary = results[0] as LiveWikipediaVehicleSummary?;
       _activeEpaSpecs = results[1] as List<LiveEpaVehicleSpec>;
       final safety = results[2]
           as ({List<LiveRecallItem> recalls, List<LiveComplaintItem> complaints});
       _activeRecalls = safety.recalls;
       _activeComplaints = safety.complaints;
-    } catch (_) {
+    } on Object {
+      // Individual services record status diagnostics
     } finally {
-      _isLoadingEncyclopediaDossier = false;
-      notifyListeners();
+      if (reqId == _dossierRequestId) {
+        _isLoadingEncyclopediaDossier = false;
+        notifyListeners();
+      }
     }
   }
 
-  /// Connects to GPS/GeoJS, Nominatim, Open-Meteo, OSRM & Unified Overpass+Photon POIs!
   Future<void> refreshAllLiveApis() async {
     if (_isLoadingLive) return;
     _isLoadingLive = true;
+    _lastRouteError = null;
     notifyListeners();
 
     try {
@@ -261,28 +290,47 @@ class OtonomAppState extends ChangeNotifier {
       _liveFuelStations = unified.fuelStations;
       _liveTowRepairs = unified.towRepairs;
       _liveRentalPlaces = unified.carRentals;
-    } catch (_) {
+    } on Object {
+      _lastRouteError = 'Canlı servisler güncellenirken bağlantı hatası oluştu.';
     } finally {
       _isLoadingLive = false;
       notifyListeners();
     }
   }
 
-  Future<void> setLiveDestination(LivePlaceSearchResult dest) async {
+  /// Calculates OSRM driving route + refreshes POIs along the route. Returns true if route ready!
+  Future<bool> setLiveDestination(LivePlaceSearchResult dest) async {
     _destinationPoint = dest.point;
     _destinationName = dest.shortName;
     _isLoadingLive = true;
+    _lastRouteError = null;
     notifyListeners();
 
     try {
-      _liveRoute =
+      final loc = await liveApis.resolveCurrentLocation();
+      _currentLocation = loc.point;
+      _locationSource = loc.source;
+
+      final route =
           await liveApis.fetchDrivingRoute(_currentLocation, _destinationPoint);
+      if (route == null || route.polyline.length < 2) {
+        _lastRouteError =
+            'Seçilen hedefe karayolu rotası hesaplanamadı. Lütfen farklı bir nokta deneyin.';
+        return false;
+      }
+      _liveRoute = route;
+      notifyListeners();
+
       final unified = await liveApis.fetchAllAutomotivePoisUnified(
         center: _currentLocation,
-        routePolyline: _liveRoute?.polyline ?? const [],
+        routePolyline: route.polyline,
       );
       _liveEvStations = unified.evStations;
       _liveFuelStations = unified.fuelStations;
+      return true;
+    } on Object {
+      _lastRouteError = 'Rota oluşturulurken ağ hatası oluştu.';
+      return false;
     } finally {
       _isLoadingLive = false;
       notifyListeners();
@@ -311,7 +359,9 @@ class OtonomAppState extends ChangeNotifier {
       await prefs.setString('user_plate', plate);
       await prefs.setString('blood_type', bloodType);
       await prefs.setString('emergency_contact', emergencyContact);
-    } catch (_) {}
+    } on Object {
+      // Non-fatal
+    }
   }
 
   void updateSocOrFuelPercent(int value) {

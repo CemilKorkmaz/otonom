@@ -121,7 +121,7 @@ class _CarEncyclopediaScreenState extends State<CarEncyclopediaScreen> {
         isShowingCustom ? _customComplaints : widget.appState.activeComplaints;
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 30),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 110),
       children: [
         // Top Toolbar: Active Garage Car vs Custom World Car Lookup
         Row(

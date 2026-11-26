@@ -7,11 +7,10 @@ import '../models/live_api_models.dart';
 
 class LiveApisService {
   static const Map<String, String> _headers = {
-    'User-Agent': 'OtonomSuperApp/1.2.0 (https://github.com/CemilKorkmaz/otonom)',
+    'User-Agent': 'OtonomSuperApp/1.3.0 (https://github.com/CemilKorkmaz/otonom)',
     'Accept': 'application/json',
   };
 
-  // Fast, load-balanced Overpass instances (private.coffee first — zero congestion!)
   static const List<String> _overpassMirrors = [
     'https://overpass.private.coffee/api/interpreter',
     'https://overpass.kumi.systems/api/interpreter',
@@ -19,7 +18,14 @@ class LiveApisService {
     'https://lz4.overpass-api.de/api/interpreter',
   ];
 
+  final http.Client _client;
   final Map<String, ApiEndpointStatus> statuses = {};
+
+  LiveApisService({http.Client? client}) : _client = client ?? http.Client();
+
+  void dispose() {
+    _client.close();
+  }
 
   void _recordStatus({
     required String id,
@@ -52,7 +58,43 @@ class LiveApisService {
     return 2 * earthRadiusKm * math.asin(math.sqrt(h.clamp(0.0, 1.0)));
   }
 
+  /// Calculates initial compass bearing (0..360°) from point A to point B
+  static double bearingDegrees(LatLng from, LatLng to) {
+    final lat1 = _degToRad(from.latitude);
+    final lat2 = _degToRad(to.latitude);
+    final dLon = _degToRad(to.longitude - from.longitude);
+    final y = math.sin(dLon) * math.cos(lat2);
+    final x = math.cos(lat1) * math.sin(lat2) -
+        math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
+    final brng = math.atan2(y, x) * (180.0 / math.pi);
+    return (brng + 360.0) % 360.0;
+  }
+
   static double _degToRad(double deg) => deg * (math.pi / 180.0);
+
+  /// Real-time GPS stream for Fullscreen Turn-by-Turn Navigation
+  Future<Stream<Position>?> openLiveNavigationStream() async {
+    try {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) return null;
+      LocationPermission perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm != LocationPermission.always &&
+          perm != LocationPermission.whileInUse) {
+        return null;
+      }
+      return Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.bestForNavigation,
+          distanceFilter: 3,
+        ),
+      );
+    } on Object {
+      return null;
+    }
+  }
 
   /// 1. Real Device GPS + GeoJS Public IP Geolocation Fallback
   Future<({LatLng point, String source})> resolveCurrentLocation() async {
@@ -86,10 +128,12 @@ class LiveApisService {
           return (point: pt, source: 'Canlı GPS');
         }
       }
-    } catch (_) {}
+    } on Object {
+      // Fall through to GeoJS IP location when GPS permission/hardware unavailable
+    }
 
     try {
-      final res = await http
+      final res = await _client
           .get(Uri.parse('https://get.geojs.io/v1/ip/geo.json'), headers: _headers)
           .timeout(const Duration(seconds: 6));
       sw.stop();
@@ -111,7 +155,9 @@ class LiveApisService {
           return (point: pt, source: 'Canlı Konum ($city)');
         }
       }
-    } catch (_) {}
+    } on Object {
+      // Recorded below
+    }
 
     sw.stop();
     const istanbul = LatLng(40.9903, 29.0292);
@@ -121,12 +167,12 @@ class LiveApisService {
       provider: 'Varsayılan Merkez',
       online: false,
       latencyMs: sw.elapsedMilliseconds,
-      summary: 'Konum izni bekleniyor',
+      summary: 'Konum izni bekleniyor (Varsayılan: İstanbul)',
     );
     return (point: istanbul, source: 'İstanbul Merkez');
   }
 
-  /// 2A. Nominatim Reverse Geocoding (GPS -> Exact Open Street Address for 112 SOS)
+  /// 2A. Nominatim Reverse Geocoding
   Future<String> reverseGeocodeAddress(LatLng point) async {
     final sw = Stopwatch()..start();
     final uri = Uri.parse(
@@ -135,7 +181,7 @@ class LiveApisService {
     );
     try {
       final res =
-          await http.get(uri, headers: _headers).timeout(const Duration(seconds: 7));
+          await _client.get(uri, headers: _headers).timeout(const Duration(seconds: 7));
       sw.stop();
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
@@ -152,13 +198,30 @@ class LiveApisService {
           return display;
         }
       }
-    } catch (_) {}
-    sw.stop();
+      _recordStatus(
+        id: 'nominatim',
+        name: 'Açık Adres & Arama (Nominatim)',
+        provider: 'nominatim.openstreetmap.org',
+        online: false,
+        latencyMs: sw.elapsedMilliseconds,
+        summary: 'HTTP ${res.statusCode} yanıtı alındı',
+      );
+    } on Object {
+      sw.stop();
+      _recordStatus(
+        id: 'nominatim',
+        name: 'Açık Adres & Arama (Nominatim)',
+        provider: 'nominatim.openstreetmap.org',
+        online: false,
+        latencyMs: sw.elapsedMilliseconds,
+        summary: 'Ağ zaman aşımı — koordinat gösteriliyor',
+      );
+    }
     return '${point.latitude.toStringAsFixed(5)}° K, ${point.longitude.toStringAsFixed(5)}° D';
   }
 
-  /// 2B. Nominatim / Photon Place Search
-  Future<List<LivePlaceSearchResult>> searchPlaces(String query) async {
+  /// 2B. Nominatim + Photon Combined Place Search (fast autocomplete & search!)
+  Future<List<LivePlaceSearchResult>> searchPlaces(String query, {LatLng? biasPoint}) async {
     final q = query.trim();
     if (q.isEmpty) return [];
     final sw = Stopwatch()..start();
@@ -168,7 +231,7 @@ class LiveApisService {
     );
     try {
       final res =
-          await http.get(uri, headers: _headers).timeout(const Duration(seconds: 8));
+          await _client.get(uri, headers: _headers).timeout(const Duration(seconds: 8));
       sw.stop();
       if (res.statusCode == 200) {
         final list = jsonDecode(res.body) as List<dynamic>;
@@ -189,14 +252,56 @@ class LiveApisService {
             );
           }
         }
-        return results;
+        if (results.isNotEmpty) return results;
       }
-    } catch (_) {}
-    sw.stop();
+    } on Object {
+      sw.stop();
+    }
+
+    // Fallback to Photon Komoot Search if Nominatim was throttled
+    try {
+      final bias = biasPoint != null
+          ? '&lat=${biasPoint.latitude}&lon=${biasPoint.longitude}'
+          : '';
+      final pUri = Uri.parse(
+        'https://photon.komoot.io/api/?q=${Uri.encodeQueryComponent(q)}&limit=6$bias',
+      );
+      final pRes =
+          await _client.get(pUri, headers: _headers).timeout(const Duration(seconds: 6));
+      if (pRes.statusCode == 200) {
+        final data = jsonDecode(pRes.body) as Map<String, dynamic>;
+        final features = (data['features'] as List<dynamic>?) ?? [];
+        final out = <LivePlaceSearchResult>[];
+        for (final f in features) {
+          final fm = f as Map<String, dynamic>;
+          final coords =
+              ((fm['geometry'] as Map<String, dynamic>?)?['coordinates'] as List<dynamic>?) ??
+                  [];
+          if (coords.length < 2) continue;
+          final props = (fm['properties'] as Map<String, dynamic>?) ?? {};
+          final name = props['name']?.toString() ?? q;
+          final city = props['city'] ?? props['state'] ?? props['country'] ?? '';
+          final full = city.toString().isNotEmpty ? '$name, $city' : name;
+          out.add(
+            LivePlaceSearchResult(
+              displayName: full,
+              shortName: name,
+              point: LatLng(
+                (coords[1] as num).toDouble(),
+                (coords[0] as num).toDouble(),
+              ),
+            ),
+          );
+        }
+        return out;
+      }
+    } on Object {
+      // Return empty cleanly
+    }
     return [];
   }
 
-  /// 3. Project OSRM Live Road Route Calculation
+  /// 3. Project OSRM Live Road Route Calculation with Full Turn-by-Turn Maneuvers!
   Future<LiveOsrmRoute?> fetchDrivingRoute(LatLng origin, LatLng destination) async {
     final sw = Stopwatch()..start();
     final uri = Uri.parse(
@@ -206,7 +311,7 @@ class LiveApisService {
     );
     try {
       final res =
-          await http.get(uri, headers: _headers).timeout(const Duration(seconds: 9));
+          await _client.get(uri, headers: _headers).timeout(const Duration(seconds: 9));
       sw.stop();
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
@@ -225,49 +330,174 @@ class LiveApisService {
           }
 
           final stepsOut = <String>[];
+          final maneuversOut = <LiveNavManeuverStep>[];
           final legs = (first['legs'] as List<dynamic>?) ?? [];
           if (legs.isNotEmpty) {
             final steps =
                 ((legs.first as Map<String, dynamic>)['steps'] as List<dynamic>?) ??
                     [];
-            for (final s in steps.take(12)) {
-              final sm = s as Map<String, dynamic>;
-              final roadName = (sm['name']?.toString() ?? '').trim();
-              final distM = ((sm['distance'] as num?)?.toDouble() ?? 0).round();
-              if (roadName.isNotEmpty && distM > 50) {
-                stepsOut.add(
-                  '$roadName boyunca ${(distM / 1000).toStringAsFixed(1)} km ilerleyin',
-                );
+            for (final rawStep in steps) {
+              final sm = rawStep as Map<String, dynamic>;
+              final rawName = (sm['name']?.toString() ?? '').trim();
+              final rawRef = (sm['ref']?.toString() ?? '').trim();
+              final roadName = rawName.isNotEmpty
+                  ? (rawRef.isNotEmpty && !rawName.contains(rawRef)
+                      ? '$rawName ($rawRef)'
+                      : rawName)
+                  : (rawRef.isNotEmpty ? rawRef : 'Yol');
+              final stepDistM = (sm['distance'] as num?)?.toDouble() ?? 0.0;
+              final stepDurS = (sm['duration'] as num?)?.toDouble() ?? 0.0;
+
+              final man = (sm['maneuver'] as Map<String, dynamic>?) ?? {};
+              final mType = man['type']?.toString() ?? 'continue';
+              final mMod = man['modifier']?.toString() ?? 'straight';
+              final mExit = (man['exit'] as num?)?.toInt();
+              final mLoc = (man['location'] as List<dynamic>?) ?? [];
+              final stepPoint = mLoc.length >= 2
+                  ? LatLng((mLoc[1] as num).toDouble(), (mLoc[0] as num).toDouble())
+                  : (pts.isNotEmpty ? pts.first : origin);
+
+              final parsed = _translateOsrmManeuver(
+                type: mType,
+                modifier: mMod,
+                roadName: roadName,
+                exitNumber: mExit,
+              );
+
+              maneuversOut.add(
+                LiveNavManeuverStep(
+                  location: stepPoint,
+                  roadName: roadName,
+                  instructionTr: parsed.instructionTr,
+                  turnKind: parsed.turnKind,
+                  distanceMeters: stepDistM,
+                  durationSeconds: stepDurS,
+                ),
+              );
+
+              if (stepDistM > 30 || mType == 'arrive') {
+                stepsOut.add(parsed.instructionTr);
               }
             }
           }
 
           final km = distMeters / 1000.0;
-          final mins = (durSeconds / 60.0).round();
+          final mins = math.max(1, (durSeconds / 60.0).round());
           _recordStatus(
             id: 'osrm',
             name: 'Canlı Yol Rotası (OSRM)',
             provider: 'router.project-osrm.org',
             online: true,
             latencyMs: sw.elapsedMilliseconds,
-            summary: '${km.toStringAsFixed(1)} km · $mins dk (${pts.length} nokta)',
+            summary:
+                '${km.toStringAsFixed(1)} km · $mins dk · ${maneuversOut.length} dönüş adımı',
           );
           return LiveOsrmRoute(
             polyline: pts,
             distanceKm: km,
             durationMinutes: mins,
             stepInstructions: stepsOut,
+            maneuvers: maneuversOut,
           );
         }
       }
-    } catch (_) {}
-    sw.stop();
+      _recordStatus(
+        id: 'osrm',
+        name: 'Canlı Yol Rotası (OSRM)',
+        provider: 'router.project-osrm.org',
+        online: false,
+        latencyMs: sw.elapsedMilliseconds,
+        summary: 'Rota yanıtı alınamadı (HTTP ${res.statusCode})',
+      );
+    } on Object {
+      sw.stop();
+      _recordStatus(
+        id: 'osrm',
+        name: 'Canlı Yol Rotası (OSRM)',
+        provider: 'router.project-osrm.org',
+        online: false,
+        latencyMs: sw.elapsedMilliseconds,
+        summary: 'Rota sunucusuna ulaşılamadı',
+      );
+    }
     return null;
   }
 
-  /// 4. ZERO-RATE-LIMIT UNIFIED AUTOMOTIVE POI ENGINE:
-  /// Combines ONE single batched fast Overpass `node` query + Photon Komoot OSM search
-  /// so EV, Fuel, Tow/Repair, and Car Rental NEVER collide or fail due to server load!
+  ({String instructionTr, NavTurnKind turnKind}) _translateOsrmManeuver({
+    required String type,
+    required String modifier,
+    required String roadName,
+    int? exitNumber,
+  }) {
+    final target = roadName != 'Yol' ? '$roadName yönüne ' : '';
+    if (type == 'arrive') {
+      return (instructionTr: 'Hedefinize ulaştınız', turnKind: NavTurnKind.arrive);
+    }
+    if (type == 'depart') {
+      return (
+        instructionTr: '${roadName != "Yol" ? roadName : "Rota"} üzerinden ilerleyin',
+        turnKind: NavTurnKind.depart,
+      );
+    }
+    if (type == 'roundabout' || type == 'rotary') {
+      final ex = exitNumber != null ? '$exitNumber. çıkıştan ' : '';
+      return (
+        instructionTr: 'Döner kavşaktan $ex$targetçıkın',
+        turnKind: NavTurnKind.roundabout,
+      );
+    }
+    if (type == 'merge') {
+      return (
+        instructionTr: '${target}anayola katılın',
+        turnKind: NavTurnKind.merge,
+      );
+    }
+    if (type == 'on ramp' || type == 'off ramp') {
+      return (
+        instructionTr: '${target}bağlantı yolunu kullanın',
+        turnKind: NavTurnKind.ramp,
+      );
+    }
+
+    switch (modifier) {
+      case 'left':
+        return (instructionTr: '${target}sola dönün', turnKind: NavTurnKind.left);
+      case 'slight left':
+        return (
+          instructionTr: '${target}hafif sola yönelin',
+          turnKind: NavTurnKind.slightLeft,
+        );
+      case 'sharp left':
+        return (
+          instructionTr: '${target}keskin sola dönün',
+          turnKind: NavTurnKind.sharpLeft,
+        );
+      case 'right':
+        return (instructionTr: '${target}sağa dönün', turnKind: NavTurnKind.right);
+      case 'slight right':
+        return (
+          instructionTr: '${target}hafif sağa yönelin',
+          turnKind: NavTurnKind.slightRight,
+        );
+      case 'sharp right':
+        return (
+          instructionTr: '${target}keskin sağa dönün',
+          turnKind: NavTurnKind.sharpRight,
+        );
+      case 'uturn':
+        return (
+          instructionTr: 'U dönüşü yapın',
+          turnKind: NavTurnKind.uTurn,
+        );
+      default:
+        return (
+          instructionTr: '${roadName != "Yol" ? "$roadName boyunca " : ""}düz devam edin',
+          turnKind: NavTurnKind.straight,
+        );
+    }
+  }
+
+  /// 4. ZERO-RATE-LIMIT UNIFIED AUTOMOTIVE POI ENGINE (Overpass + Photon Komoot)
   Future<({
     List<LivePoiItem> evStations,
     List<LivePoiItem> fuelStations,
@@ -283,7 +513,6 @@ class LiveApisService {
     final towList = <LivePoiItem>[];
     final rentList = <LivePoiItem>[];
 
-    // Add 1 midpoint along route if route exists
     String midpointClause = '';
     if (routePolyline.length >= 8) {
       final mid = routePolyline[routePolyline.length ~/ 2];
@@ -293,7 +522,6 @@ class LiveApisService {
 ''';
     }
 
-    // ONE SINGLE fast node-only Overpass query instead of 3 heavy nwr queries!
     final latS = center.latitude.toStringAsFixed(4);
     final lonS = center.longitude.toStringAsFixed(4);
     final batchedQl = '''
@@ -313,7 +541,7 @@ out body 120;
 
     for (final mirror in _overpassMirrors) {
       try {
-        final res = await http
+        final res = await _client
             .post(
               Uri.parse(mirror),
               headers: {
@@ -366,12 +594,11 @@ out body 120;
           winningMirror = Uri.parse(mirror).host;
           break;
         }
-      } catch (_) {
-        // Failover seamlessly to next mirror
+      } on Object {
+        // Try next mirror
       }
     }
 
-    // Supplement any sparse category using ultra-fast Photon Komoot OSM Search (~70ms, zero rate limit!)
     final supplements = <Future<void>>[];
     if (evList.length < 3) {
       supplements.add(
@@ -422,7 +649,7 @@ out body 120;
       online: totalFound > 0,
       latencyMs: sw.elapsedMilliseconds,
       summary:
-          'EV: ${evList.length} · Yakıt: ${fuelList.length} · Servis/Çekici: ${towList.length} · Kiralama: ${rentList.length}',
+          'EV: ${evList.length} · Yakıt: ${fuelList.length} · Servis: ${towList.length} · Kiralama: ${rentList.length}',
     );
 
     return (
@@ -448,7 +675,7 @@ out body 120;
           '&lat=${center.latitude}&lon=${center.longitude}&limit=8',
         );
         final res =
-            await http.get(uri, headers: _headers).timeout(const Duration(seconds: 6));
+            await _client.get(uri, headers: _headers).timeout(const Duration(seconds: 6));
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body) as Map<String, dynamic>;
           final features = (data['features'] as List<dynamic>?) ?? [];
@@ -461,7 +688,7 @@ out body 120;
             final lat = (coords[1] as num).toDouble();
             final pt = LatLng(lat, lon);
             final distKm = haversineKm(center, pt);
-            if (distKm > 35.0) continue; // Keep relevant local results
+            if (distKm > 35.0) continue;
 
             final props = (fm['properties'] as Map<String, dynamic>?) ?? {};
             final name = (props['name']?.toString() ?? kw).trim();
@@ -489,7 +716,9 @@ out body 120;
             );
           }
         }
-      } catch (_) {}
+      } on Object {
+        // Continue with next keyword
+      }
     }
   }
 
@@ -598,7 +827,7 @@ out body 120;
     );
     try {
       final res =
-          await http.get(uri, headers: _headers).timeout(const Duration(seconds: 7));
+          await _client.get(uri, headers: _headers).timeout(const Duration(seconds: 7));
       sw.stop();
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
@@ -613,7 +842,7 @@ out body 120;
         String advisory;
         if (temp <= 4.0) {
           advisory =
-              '❄️ Asfalt sıcaklığı kritik (${temp.toStringAsFixed(1)}°C): Gizli buzlanma riski ve EV batarya rejenerasyon düşüşü olabilir.';
+              '❄️ Asfalt sıcaklığı kritik (${temp.toStringAsFixed(1)}°C): Gizli buzlanma riski ve EV rejenerasyon düşüşü olabilir.';
         } else if (precip > 0.2 || code >= 51) {
           advisory =
               '🌧️ Islak zemin (${precip.toStringAsFixed(1)} mm): Takip mesafesini 2 katına çıkarın.';
@@ -641,8 +870,25 @@ out body 120;
           drivingAdvisoryTr: advisory,
         );
       }
-    } catch (_) {}
-    sw.stop();
+      _recordStatus(
+        id: 'open_meteo',
+        name: 'Yol Hava & Zemin Telemetrisi',
+        provider: 'api.open-meteo.com',
+        online: false,
+        latencyMs: sw.elapsedMilliseconds,
+        summary: 'HTTP ${res.statusCode}',
+      );
+    } on Object {
+      sw.stop();
+      _recordStatus(
+        id: 'open_meteo',
+        name: 'Yol Hava & Zemin Telemetrisi',
+        provider: 'api.open-meteo.com',
+        online: false,
+        latencyMs: sw.elapsedMilliseconds,
+        summary: 'Hava durumu servisine ulaşılamadı',
+      );
+    }
     return null;
   }
 
@@ -676,8 +922,8 @@ out body 120;
 
     try {
       final results = await Future.wait([
-        http.get(nhtsaUri, headers: _headers).timeout(const Duration(seconds: 7)),
-        http.get(epaUri, headers: _headers).timeout(const Duration(seconds: 7)),
+        _client.get(nhtsaUri, headers: _headers).timeout(const Duration(seconds: 7)),
+        _client.get(epaUri, headers: _headers).timeout(const Duration(seconds: 7)),
       ]);
 
       if (results[0].statusCode == 200) {
@@ -704,8 +950,16 @@ out body 120;
         latencyMs: sw.elapsedMilliseconds,
         summary: '$year $make için ${modelsSet.length} canlı model bulundu',
       );
-    } catch (_) {
+    } on Object {
       sw.stop();
+      _recordStatus(
+        id: 'nhtsa_vpic',
+        name: 'Global Araç Katalog API (NHTSA+EPA)',
+        provider: 'vpic.nhtsa.dot.gov',
+        online: false,
+        latencyMs: sw.elapsedMilliseconds,
+        summary: 'Çevrimdışı katalog önerileri kullanılıyor',
+      );
     }
 
     final sorted = modelsSet.toList()..sort();
@@ -722,8 +976,6 @@ out body 120;
     final sw = Stopwatch()..start();
     final recallsOut = <LiveRecallItem>[];
     final complaintsOut = <LiveComplaintItem>[];
-
-    // Strip extra trim words if user entered e.g. "Passat 1.5 TSI" -> try "Passat" too
     final cleanModel = model.split(' ').first.trim();
 
     final recallUri = Uri.parse(
@@ -741,8 +993,8 @@ out body 120;
 
     try {
       final responses = await Future.wait([
-        http.get(recallUri, headers: _headers).timeout(const Duration(seconds: 8)),
-        http.get(complaintUri, headers: _headers).timeout(const Duration(seconds: 8)),
+        _client.get(recallUri, headers: _headers).timeout(const Duration(seconds: 8)),
+        _client.get(complaintUri, headers: _headers).timeout(const Duration(seconds: 8)),
       ]);
       sw.stop();
 
@@ -791,8 +1043,16 @@ out body 120;
         summary:
             '${recallsOut.length} recall · ${complaintsOut.length} sürücü şikayeti',
       );
-    } catch (_) {
+    } on Object {
       sw.stop();
+      _recordStatus(
+        id: 'nhtsa_safety',
+        name: 'Geri Çağırma & Kronik Şikayet API',
+        provider: 'api.nhtsa.gov',
+        online: false,
+        latencyMs: sw.elapsedMilliseconds,
+        summary: 'NHTSA güvenlik sunucusuna ulaşılamadı',
+      );
     }
 
     return (recalls: recallsOut, complaints: complaintsOut);
@@ -817,7 +1077,7 @@ out body 120;
       );
 
       try {
-        final optRes = await http
+        final optRes = await _client
             .get(optionsUri, headers: _headers)
             .timeout(const Duration(seconds: 7));
         if (optRes.statusCode != 200) continue;
@@ -831,7 +1091,7 @@ out body 120;
           final trimText = item['text']?.toString() ?? '';
           if (vehicleId.isEmpty) continue;
 
-          final detailRes = await http
+          final detailRes = await _client
               .get(
                 Uri.parse('https://www.fueleconomy.gov/ws/rest/vehicle/$vehicleId'),
                 headers: _headers,
@@ -903,14 +1163,16 @@ out body 120;
           );
           return specs;
         }
-      } catch (_) {}
+      } on Object {
+        // Try next candidate model token
+      }
     }
 
     sw.stop();
     return [];
   }
 
-  /// 8. Wikipedia TR + EN Live Vehicle Photo & History Dossier API (covers EVERY EU/TR/World Car!)
+  /// 8. Wikipedia TR + EN Live Vehicle Photo & History Dossier API
   Future<LiveWikipediaVehicleSummary?> fetchVehicleWikipediaSummary({
     required String make,
     required String model,
@@ -918,14 +1180,13 @@ out body 120;
     final sw = Stopwatch()..start();
     final searchQuery = '$make $model'.trim();
 
-    // Try Turkish Wikipedia first, then English Wikipedia for even broader coverage
     for (final lang in const ['tr', 'en']) {
       try {
         final searchUri = Uri.parse(
           'https://$lang.wikipedia.org/w/api.php?action=query&list=search'
           '&srsearch=${Uri.encodeQueryComponent(searchQuery)}&format=json&srlimit=1',
         );
-        final sRes = await http
+        final sRes = await _client
             .get(searchUri, headers: _headers)
             .timeout(const Duration(seconds: 6));
         if (sRes.statusCode != 200) continue;
@@ -940,7 +1201,7 @@ out body 120;
         final summaryUri = Uri.parse(
           'https://$lang.wikipedia.org/api/rest_v1/page/summary/${Uri.encodeComponent(pageTitle.replaceAll(' ', '_'))}',
         );
-        final sumRes = await http
+        final sumRes = await _client
             .get(summaryUri, headers: _headers)
             .timeout(const Duration(seconds: 6));
         if (sumRes.statusCode == 200) {
@@ -970,7 +1231,9 @@ out body 120;
             pageUrl: desktopUrl,
           );
         }
-      } catch (_) {}
+      } on Object {
+        // Fallback to next language
+      }
     }
     sw.stop();
     return null;

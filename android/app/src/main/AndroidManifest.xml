@@ -3,9 +3,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.CALL_PHONE" />
 
-    <!-- Required on Android 11+ (API 30+) for tel:112 and tow truck dialing -->
+    <!-- Required on Android 11+ (API 30+) for tel:112, tow truck dialing, and https external links -->
     <queries>
         <intent>
             <action android:name="android.intent.action.VIEW" />
@@ -24,7 +23,7 @@
     <application
         android:label="Otonom"
         android:name="${applicationName}"
-        android:icon="@drawable/ic_launcher_tesla">
+        android:icon="@drawable/ic_launcher_otonom">
 
         <activity
             android:name=".MainActivity"
@@ -39,10 +38,24 @@
                 android:resource="@style/NormalTheme" />
         </activity>
 
+        <!-- Default Neutral Otonom Launcher Icon (before user selects a specific crest brand) -->
+        <activity-alias
+            android:name=".MainActivityOtonom"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@drawable/ic_launcher_otonom"
+            android:label="Otonom"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
         <!-- Dynamic Launcher Icons per Selected Car Brand -->
         <activity-alias
             android:name=".MainActivityTesla"
-            android:enabled="true"
+            android:enabled="false"
             android:exported="true"
             android:icon="@drawable/ic_launcher_tesla"
             android:label="Otonom · Tesla"

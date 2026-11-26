@@ -52,17 +52,53 @@ class LiveRoadWeather {
   });
 }
 
+enum NavTurnKind {
+  depart,
+  straight,
+  slightLeft,
+  left,
+  sharpLeft,
+  slightRight,
+  right,
+  sharpRight,
+  uTurn,
+  roundabout,
+  merge,
+  ramp,
+  arrive,
+}
+
+class LiveNavManeuverStep {
+  final LatLng location;
+  final String roadName;
+  final String instructionTr;
+  final NavTurnKind turnKind;
+  final double distanceMeters;
+  final double durationSeconds;
+
+  const LiveNavManeuverStep({
+    required this.location,
+    required this.roadName,
+    required this.instructionTr,
+    required this.turnKind,
+    required this.distanceMeters,
+    required this.durationSeconds,
+  });
+}
+
 class LiveOsrmRoute {
   final List<LatLng> polyline;
   final double distanceKm;
   final int durationMinutes;
   final List<String> stepInstructions;
+  final List<LiveNavManeuverStep> maneuvers;
 
   const LiveOsrmRoute({
     required this.polyline,
     required this.distanceKm,
     required this.durationMinutes,
     required this.stepInstructions,
+    this.maneuvers = const [],
   });
 }
 

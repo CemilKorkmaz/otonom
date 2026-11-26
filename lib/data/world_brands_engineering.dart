@@ -23,7 +23,7 @@ class BrandEngineeringProfile {
     required this.primaryColor,
     required this.secondaryColor,
     this.crestId = CarBrandId.other,
-    this.dynamicIconKey = 'tesla',
+    this.dynamicIconKey = 'otonom',
     required this.wheelPcd,
     required this.centerBore,
     required this.lugThreadAndSeat,
@@ -544,12 +544,12 @@ class WorldBrandsEngineering {
         name: 'Otonom',
         shortCode: 'OTONOM',
         slogan: 'Garajım sekmesinden kendi aracınızı ekleyin',
-        dynamicIconKey: 'tesla',
-        primaryColor: Color(0xFF0EA5E9),
-        secondaryColor: Color(0xFF38BDF8),
-        surfaceColor: Color(0xFF070B12),
-        cardColor: Color(0xFF111827),
-        glowColor: Color(0x550EA5E9),
+        dynamicIconKey: 'otonom',
+        primaryColor: Color(0xFF0A84FF),
+        secondaryColor: Color(0xFF5AC8FA),
+        surfaceColor: Color(0xFF000000),
+        cardColor: Color(0xFF1C1C1E),
+        glowColor: Color(0x550A84FF),
       );
     }
 

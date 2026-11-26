@@ -10,6 +10,7 @@ class MainActivity : FlutterActivity() {
     private val channelName = "com.otonom.app/dynamic_icon"
 
     private val brandAliases = mapOf(
+        "otonom" to ".MainActivityOtonom",
         "tesla" to ".MainActivityTesla",
         "bmw" to ".MainActivityBmw",
         "togg" to ".MainActivityTogg",
@@ -24,7 +25,7 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->
                 if (call.method == "setAlternateIcon") {
-                    val iconKey = call.argument<String>("iconKey") ?: "tesla"
+                    val iconKey = call.argument<String>("iconKey") ?: "otonom"
                     val switched = switchLauncherAlias(iconKey)
                     result.success(switched)
                 } else {
@@ -35,13 +36,20 @@ class MainActivity : FlutterActivity() {
 
     private fun switchLauncherAlias(selectedKey: String): Boolean {
         return try {
-            val targetSuffix = brandAliases[selectedKey] ?: ".MainActivityTesla"
+            val targetSuffix = brandAliases[selectedKey] ?: ".MainActivityOtonom"
             val pm = applicationContext.packageManager
             val pkg = applicationContext.packageName
+            val targetComponent = ComponentName(pkg, "$pkg$targetSuffix")
+
+            // Avoid redundant launcher restarts if target alias is already enabled
+            val currentState = pm.getComponentEnabledSetting(targetComponent)
+            if (currentState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED) {
+                return true
+            }
 
             // Enable selected alias first so the launcher always has an active entry
             pm.setComponentEnabledSetting(
-                ComponentName(pkg, "$pkg$targetSuffix"),
+                targetComponent,
                 PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
                 PackageManager.DONT_KILL_APP
             )
