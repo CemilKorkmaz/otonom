@@ -129,7 +129,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen> {
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: appState.garageVehicles.length,
-                    separatorBuilder: (_, _) => const SizedBox(width: 6),
+                    separatorBuilder: (_, __) => const SizedBox(width: 6),
                     itemBuilder: (ctx, idx) {
                       final gv = appState.garageVehicles[idx];
                       final selected = gv.id == activeCar?.id;

@@ -430,7 +430,7 @@ class _VehicleHeroDossierCard extends StatelessWidget {
                   child: Image.network(
                     wiki!.imageUrl!,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                   ),
                 ),
                 Positioned(

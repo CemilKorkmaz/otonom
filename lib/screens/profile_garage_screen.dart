@@ -287,46 +287,45 @@ class _ProfileGarageScreenState extends State<ProfileGarageScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Row(
+                TextField(
+                  controller: _plateController,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: InputDecoration(
+                    labelText: 'Varsayılan Plaka',
+                    hintText: '34 ABC 123',
+                    prefixIcon: const Icon(Icons.pin_outlined),
+                    filled: true,
+                    fillColor: Colors.black26,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Kan Grubu: $_selectedBloodType',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white70,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
                   children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _plateController,
-                        textCapitalization: TextCapitalization.characters,
-                        decoration: InputDecoration(
-                          labelText: 'Varsayılan Plaka',
-                          hintText: '34 ABC 123',
-                          prefixIcon: const Icon(Icons.pin_outlined),
-                          filled: true,
-                          fillColor: Colors.black26,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
+                    for (final b in _bloodTypes)
+                      ChoiceChip(
+                        visualDensity: VisualDensity.compact,
+                        selected: _selectedBloodType == b,
+                        label: Text(b, style: const TextStyle(fontSize: 11.5)),
+                        onSelected: (_) =>
+                            setState(() => _selectedBloodType = b),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        initialValue: _selectedBloodType,
-                        decoration: InputDecoration(
-                          labelText: 'Kan Grubu',
-                          filled: true,
-                          fillColor: Colors.black26,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        items: _bloodTypes
-                            .map((b) => DropdownMenuItem(value: b, child: Text(b)))
-                            .toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            setState(() => _selectedBloodType = val);
-                          }
-                        },
-                      ),
-                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -764,7 +763,7 @@ class _AddWorldVehicleSheetState extends State<_AddWorldVehicleSheet> {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: filteredBrands.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 6),
+                separatorBuilder: (_, __) => const SizedBox(width: 6),
                 itemBuilder: (ctx, i) {
                   final b = filteredBrands[i];
                   final selected =
@@ -867,7 +866,7 @@ class _AddWorldVehicleSheetState extends State<_AddWorldVehicleSheet> {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: combinedSuggestedModels.take(35).length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 6),
+                  separatorBuilder: (_, __) => const SizedBox(width: 6),
                   itemBuilder: (ctx, idx) {
                     final m = combinedSuggestedModels[idx];
                     return ActionChip(

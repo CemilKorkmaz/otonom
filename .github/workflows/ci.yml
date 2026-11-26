@@ -58,10 +58,16 @@ jobs:
         run: flutter pub get
 
       - name: Run Flutter static analysis
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter analyze --no-fatal-infos --no-fatal-warnings 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Run Flutter unit & widget tests
-        run: flutter test
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter test 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Build Installable Android Release APK (v1.2.0)
         run: |
