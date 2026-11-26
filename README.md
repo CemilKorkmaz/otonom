@@ -6,10 +6,9 @@
 
 ## Temel Özellikler
 
-1. **Dinamik Marka Kimliği, Logo & Arayüz Teması (Garajım)**
-   - Kullanıcı profilden kendi aracını seçtiğinde (**Tesla, BMW M, Togg, Mercedes-AMG, Porsche, Audi RS**):
-     - Uygulama içi amblem ve tüm kokpit arayüz teması anında seçilen markanın renk paletine dönüşür.
-     - Gerçek iOS (`CFBundleAlternateIcons` — `ios/Runner/Info.plist` & `AppDelegate.swift`) ve Android (`<activity-alias>` — `AndroidManifest.xml` & `MainActivity.kt`) köprüsü (`MethodChannel: com.otonom.app/dynamic_icon`) üzerinden telefon ana ekranındaki uygulama ikonu da seçilen markaya dönüşür.
+1. **Dünya Üzerindeki Her Aracı Ekleyebileceğiniz Kişisel Garajım (`v1.2.0`)**
+   - Hazır örnek araçlar yerine, kullanıcı kendi istediği **dünya üzerindeki herhangi bir marka, model, yıl ve motor/donanım paketindeki** aracı garajına ekler (`SharedPreferences` ile kalıcı kayıt).
+   - 45+ global/Türkiye pazarındaki marka için özgün kokpit renk paleti, amblem/monogram ve uyumlu markalarda dinamik ana ekran ikonu otomatik devreye girer.
 
 2. **Akıllı Navigasyon & Motor Tipine Duyarlı İstasyon Rotası**
    - Seçili araç **Elektrikli (EV)** ise (örn. *Tesla Model Y*, *Togg T10X*, *Porsche Taycan*): Yol üstündeki **DC Hızlı Şarj İstasyonlarını** (*Tesla Supercharger, Trugo, ZES, Eşarj*), kaç km ileride olduklarını, kW güçlerini, boş soket sayısını ve tahmini varış batarya yüzdesini gösterir.
@@ -47,7 +46,7 @@ otonom/
 │   ├── data/                     # Detaylı OEM teknik katalog & Türkiye otoyol rotaları
 │   ├── services/                 # Car.info/VIN servisi, 112/Çekici arama, Dinamik İkon köprüsü
 │   ├── widgets/                  # Özel vektörel marka amblemleri & interaktif kokpit haritası
-│   └── screens/                  # Rota, Çekici & 112, Ansiklopedi, Kiralama, Garajım ekranları
+│   └── screens/                  # Rota, Acil, Ansiklopedi, Kiralama, Garajım ekranları
 ├── android/                      # Android izinleri & <activity-alias> dinamik ikon yapılandırması
 ├── ios/                          # iOS Info.plist CFBundleAlternateIcons & AppDelegate Swift köprüsü
 ├── test/widget_test.dart         # Birim ve widget testleri

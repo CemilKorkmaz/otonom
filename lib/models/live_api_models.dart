@@ -161,3 +161,17 @@ class LiveComplaintItem {
     required this.dateIncident,
   });
 }
+
+class LiveWikipediaVehicleSummary {
+  final String title;
+  final String extract;
+  final String? imageUrl;
+  final String? pageUrl;
+
+  const LiveWikipediaVehicleSummary({
+    required this.title,
+    required this.extract,
+    this.imageUrl,
+    this.pageUrl,
+  });
+}

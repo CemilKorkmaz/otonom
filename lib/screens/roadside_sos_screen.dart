@@ -301,7 +301,7 @@ class _RoadsideSosScreenState extends State<RoadsideSosScreen> {
   }
 
   void _showLiveRepairCallSheet(BuildContext context, LivePoiItem poi) {
-    final v = widget.appState.selectedVehicle;
+    final activeTitle = widget.appState.activeVehicleTitle;
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF101520),
@@ -330,7 +330,7 @@ class _RoadsideSosScreenState extends State<RoadsideSosScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              '🔧 Araç Bilgisi: ${v.brandName} ${v.modelName} (${v.curbWeightKg} kg)',
+              '🔧 Araç Bilgisi: $activeTitle',
               style: const TextStyle(fontSize: 12, color: Color(0xFF93C5FD)),
             ),
             const SizedBox(height: 16),
@@ -412,7 +412,7 @@ class _Emergency112CallSheetState extends State<_Emergency112CallSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final v = widget.appState.selectedVehicle;
+    final activeCar = widget.appState.activeGarageVehicle;
     final pt = widget.appState.currentLocation;
     final mins = (_secondsConnected ~/ 60).toString().padLeft(2, '0');
     final secs = (_secondsConnected % 60).toString().padLeft(2, '0');
@@ -462,7 +462,7 @@ class _Emergency112CallSheetState extends State<_Emergency112CallSheet> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '🚗 Araç: ${v.brandName} ${v.modelName} · Plaka: ${widget.appState.userPlate}',
+                  '🚗 Araç: ${activeCar?.fullTitle ?? "Belirtilmedi"} · Plaka: ${widget.appState.userPlate}',
                   style: const TextStyle(fontSize: 13),
                 ),
                 const SizedBox(height: 5),
@@ -472,9 +472,9 @@ class _Emergency112CallSheetState extends State<_Emergency112CallSheet> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  v.powertrain.isElectric
+                  widget.appState.isElectricVehicle
                       ? '⚡ İTFAİYE UYARISI: Yüksek Voltajlı Elektrikli Araç (HV Batarya Kesici Ön Kaput Altı)'
-                      : '⛽ YAKIT TİPİ: İçten Yanmalı (${v.powertrain.labelTr})',
+                      : '⛽ YAKIT TİPİ: ${activeCar?.powertrain.labelTr ?? "İçten Yanmalı"}',
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -521,7 +521,7 @@ class _TowOperatorCallSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final v = appState.selectedVehicle;
+    final activeTitle = appState.activeVehicleTitle;
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 24, 22, 32),
       child: Column(
@@ -541,7 +541,7 @@ class _TowOperatorCallSheet extends StatelessWidget {
           Text('📍 İletilecek Canlı Konumunuz: ${appState.liveStreetAddress}'),
           const SizedBox(height: 6),
           Text(
-            '🔧 Araç: ${v.brandName} ${v.modelName} (${v.curbWeightKg} kg · ${v.drivetrainLayout})',
+            '🔧 Araç: $activeTitle',
             style: const TextStyle(color: Color(0xFF93C5FD), fontSize: 12.5),
           ),
           const SizedBox(height: 16),

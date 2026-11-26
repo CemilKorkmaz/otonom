@@ -36,6 +36,14 @@ class LiveOsmCockpitMap extends StatefulWidget {
 class _LiveOsmCockpitMapState extends State<LiveOsmCockpitMap> {
   final MapController _mapController = MapController();
 
+  // Official invert + 180° hue-rotation cockpit dark matrix (preserves blue seas & green parks)
+  static const ColorFilter _darkCockpitMatrix = ColorFilter.matrix(<double>[
+    0.574, -1.430, -0.144, 0, 255,
+    -0.426, -0.430, -0.144, 0, 255,
+    -0.426, -1.430, 0.856, 0, 255,
+    0, 0, 0, 1, 0,
+  ]);
+
   @override
   void didUpdateWidget(covariant LiveOsmCockpitMap oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -48,9 +56,10 @@ class _LiveOsmCockpitMapState extends State<LiveOsmCockpitMap> {
 
   @override
   Widget build(BuildContext context) {
-    final tileUrl = widget.darkTiles
-        ? 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
-        : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+    final baseTileLayer = TileLayer(
+      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      userAgentPackageName: 'com.otonom.otonom',
+    );
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(22),
@@ -71,17 +80,20 @@ class _LiveOsmCockpitMapState extends State<LiveOsmCockpitMap> {
                 initialZoom: widget.initialZoom,
               ),
               children: [
-                TileLayer(
-                  urlTemplate: tileUrl,
-                  userAgentPackageName: 'com.otonom.otonom',
-                ),
+                if (widget.darkTiles)
+                  ColorFiltered(
+                    colorFilter: _darkCockpitMatrix,
+                    child: baseTileLayer,
+                  )
+                else
+                  baseTileLayer,
                 if (widget.routePolyline.length >= 2)
                   PolylineLayer(
                     polylines: [
                       Polyline(
                         points: widget.routePolyline,
                         strokeWidth: 9.0,
-                        color: widget.accentColor.withValues(alpha: 0.30),
+                        color: widget.accentColor.withValues(alpha: 0.32),
                       ),
                       Polyline(
                         points: widget.routePolyline,
@@ -92,11 +104,10 @@ class _LiveOsmCockpitMapState extends State<LiveOsmCockpitMap> {
                   ),
                 MarkerLayer(
                   markers: [
-                    // Live POI markers
                     for (final poi in widget.pois)
                       Marker(
                         point: poi.point,
-                        width: 118,
+                        width: 122,
                         height: 36,
                         child: GestureDetector(
                           onTap: () => widget.onPoiTap?.call(poi),
@@ -141,7 +152,6 @@ class _LiveOsmCockpitMapState extends State<LiveOsmCockpitMap> {
                           ),
                         ),
                       ),
-                    // Destination marker
                     if (widget.destinationPoint != null)
                       Marker(
                         point: widget.destinationPoint!,
@@ -160,7 +170,6 @@ class _LiveOsmCockpitMapState extends State<LiveOsmCockpitMap> {
                           ),
                         ),
                       ),
-                    // User Live GPS Marker
                     Marker(
                       point: widget.userLocation,
                       width: 44,
@@ -189,7 +198,6 @@ class _LiveOsmCockpitMapState extends State<LiveOsmCockpitMap> {
                 ),
               ],
             ),
-            // Floating Map Controls (Recenter GPS & Dark/Street Layer Toggle)
             Positioned(
               right: 10,
               top: 10,
@@ -209,7 +217,7 @@ class _LiveOsmCockpitMapState extends State<LiveOsmCockpitMap> {
                       icon: widget.darkTiles
                           ? Icons.light_mode_rounded
                           : Icons.dark_mode_rounded,
-                      tooltip: 'Harita Katmanını Değiştir',
+                      tooltip: 'Koyu / Açık Harita',
                       onTap: widget.onToggleTileStyle!,
                     ),
                 ],
@@ -221,12 +229,14 @@ class _LiveOsmCockpitMapState extends State<LiveOsmCockpitMap> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.68),
+                  color: Colors.black.withValues(alpha: 0.72),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: const Text(
-                  '© OpenStreetMap · OSRM · Overpass Canlı',
-                  style: TextStyle(fontSize: 9.5, color: Colors.white70),
+                child: Text(
+                  widget.darkTiles
+                      ? '© OpenStreetMap · Koyu Kokpit Modu'
+                      : '© OpenStreetMap · Gündüz Modu',
+                  style: const TextStyle(fontSize: 9.5, color: Colors.white70),
                 ),
               ),
             ),

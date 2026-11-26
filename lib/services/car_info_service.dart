@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import '../data/mock_automotive_catalog.dart';
 import '../models/vehicle_spec.dart';
 
@@ -32,6 +33,14 @@ class VinLookupResult {
 /// Integrates Car.info deep-catalog indexing with NHTSA vPIC live VIN decoding
 /// and local OEM workshop fastener/torque specifications.
 class CarInfoService {
+  static Future<bool> openUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      return launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+    return false;
+  }
+
   List<VehicleSpec> searchCatalog(String query) {
     final q = query.trim().toLowerCase();
     if (q.isEmpty) return AutomotiveCatalog.vehicles;

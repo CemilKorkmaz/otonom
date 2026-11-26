@@ -3,6 +3,7 @@ import '../models/brand_theme_config.dart';
 
 class BrandEmblem extends StatelessWidget {
   final CarBrandId brandId;
+  final String brandName;
   final double size;
   final Color primaryColor;
   final Color secondaryColor;
@@ -11,16 +12,27 @@ class BrandEmblem extends StatelessWidget {
   const BrandEmblem({
     super.key,
     required this.brandId,
+    this.brandName = 'OTONOM',
     this.size = 42,
     required this.primaryColor,
     required this.secondaryColor,
     this.asAppIconTile = false,
   });
 
+  String _computeMonogram(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return 'OT';
+    final parts = trimmed.split(RegExp(r'[\s\-]+'));
+    if (parts.length >= 2 && parts[0].isNotEmpty && parts[1].isNotEmpty) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    return trimmed.substring(0, trimmed.length >= 2 ? 2 : 1).toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 350),
+      duration: const Duration(milliseconds: 300),
       width: size,
       height: size,
       decoration: BoxDecoration(
@@ -29,29 +41,41 @@ class BrandEmblem extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            primaryColor.withValues(alpha: 0.28),
+            primaryColor.withValues(alpha: 0.32),
             const Color(0xFF0B0E16),
           ],
         ),
         border: Border.all(
-          color: primaryColor.withValues(alpha: 0.75),
+          color: primaryColor.withValues(alpha: 0.8),
           width: 1.6,
         ),
         boxShadow: [
           BoxShadow(
             color: primaryColor.withValues(alpha: 0.35),
-            blurRadius: 14,
+            blurRadius: 12,
             spreadRadius: 1,
           ),
         ],
       ),
-      child: CustomPaint(
-        painter: _BrandCrestPainter(
-          brandId: brandId,
-          primaryColor: primaryColor,
-          secondaryColor: secondaryColor,
-        ),
-      ),
+      child: brandId == CarBrandId.other
+          ? Center(
+              child: Text(
+                _computeMonogram(brandName),
+                style: TextStyle(
+                  fontSize: size * 0.36,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.6,
+                  color: Colors.white,
+                ),
+              ),
+            )
+          : CustomPaint(
+              painter: _BrandCrestPainter(
+                brandId: brandId,
+                primaryColor: primaryColor,
+                secondaryColor: secondaryColor,
+              ),
+            ),
     );
   }
 }
@@ -86,7 +110,6 @@ class _BrandCrestPainter extends CustomPainter {
 
     switch (brandId) {
       case CarBrandId.tesla:
-        // Stylized T crest + roof arc
         final roofPath = Path()
           ..moveTo(cx - r * 0.85, cy - r * 0.58)
           ..quadraticBezierTo(cx, cy - r * 0.92, cx + r * 0.85, cy - r * 0.58);
@@ -101,7 +124,6 @@ class _BrandCrestPainter extends CustomPainter {
         break;
 
       case CarBrandId.bmw:
-        // Roundel quadrants + M tricolor accent
         canvas.drawCircle(Offset(cx, cy), r, strokePaint..color = Colors.white);
         final rect = Rect.fromCircle(center: Offset(cx, cy), radius: r * 0.78);
         canvas.drawArc(rect, -3.14159 / 2, 3.14159 / 2, true, accentPaint);
@@ -112,7 +134,6 @@ class _BrandCrestPainter extends CustomPainter {
         break;
 
       case CarBrandId.togg:
-        // Dual converging diamond arrows (East meets West)
         final leftGem = Path()
           ..moveTo(cx - r * 0.12, cy)
           ..lineTo(cx - r * 0.85, cy - r * 0.55)
@@ -130,7 +151,6 @@ class _BrandCrestPainter extends CustomPainter {
         break;
 
       case CarBrandId.mercedes:
-        // Three-pointed star inside ring
         canvas.drawCircle(
           Offset(cx, cy),
           r,
@@ -154,7 +174,6 @@ class _BrandCrestPainter extends CustomPainter {
         break;
 
       case CarBrandId.porsche:
-        // Shield crest outline + racing stripes
         final shield = Path()
           ..moveTo(cx - r * 0.7, cy - r * 0.8)
           ..lineTo(cx + r * 0.7, cy - r * 0.8)
@@ -177,7 +196,6 @@ class _BrandCrestPainter extends CustomPainter {
         break;
 
       case CarBrandId.audi:
-        // Four interlocking rings
         final ringRadius = r * 0.36;
         final offsets = [-1.05, -0.35, 0.35, 1.05];
         final ringPaint = Paint()
@@ -191,6 +209,9 @@ class _BrandCrestPainter extends CustomPainter {
             ringPaint,
           );
         }
+        break;
+
+      case CarBrandId.other:
         break;
     }
   }

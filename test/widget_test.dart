@@ -1,48 +1,66 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otonom/data/mock_automotive_catalog.dart';
-import 'package:otonom/models/brand_theme_config.dart';
-import 'package:otonom/models/route_station.dart';
+import 'package:otonom/data/world_brands_engineering.dart';
 import 'package:otonom/main.dart';
+import 'package:otonom/models/brand_theme_config.dart';
+import 'package:otonom/models/user_garage_vehicle.dart';
 import 'package:otonom/state/app_state.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  test('Switching from Tesla EV to BMW M4 switches theme and station category', () async {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
+  test('Garage starts empty and allows adding any vehicle in the world', () async {
     final state = OtonomAppState();
+    expect(state.garageVehicles, isEmpty);
+    expect(state.activeGarageVehicle, isNull);
 
-    // Default vehicle is Tesla Model Y (Electric)
-    expect(state.selectedVehicle.brandId, CarBrandId.tesla);
-    expect(state.isElectricVehicle, isTrue);
-    expect(
-      state.relevantRouteStations.every((s) => s.category == StationCategory.evCharger),
-      isTrue,
+    const passat = UserGarageVehicle(
+      id: 'vw_passat_2021',
+      make: 'Volkswagen',
+      model: 'Passat',
+      year: 2021,
+      trimOrEngine: '1.5 TSI Elegance DSG',
+      powertrain: PowertrainType.gasoline,
+      plate: '34 OTN 120',
+      customHp: 150,
     );
+    await state.addGarageVehicle(passat);
 
-    // Switch to BMW M4 Competition (Gasoline)
-    final bmw = AutomotiveCatalog.vehicles
-        .firstWhere((v) => v.brandId == CarBrandId.bmw);
-    await state.selectGarageVehicle(bmw);
-
-    expect(state.selectedVehicle.brandId, CarBrandId.bmw);
-    expect(state.brandTheme.shortCode, 'BMW');
+    expect(state.garageVehicles.length, 1);
+    expect(state.activeGarageVehicle?.make, 'Volkswagen');
     expect(state.isElectricVehicle, isFalse);
-    expect(
-      state.relevantRouteStations
-          .every((s) => s.category == StationCategory.fuelStation),
-      isTrue,
+
+    final bolts = WorldBrandsEngineering.buildDetailedBoltSpecs(passat);
+    final fluids = WorldBrandsEngineering.buildDetailedFluidSpecs(passat);
+    expect(bolts.length, greaterThanOrEqualTo(10));
+    expect(fluids, isNotEmpty);
+
+    const togg = UserGarageVehicle(
+      id: 'togg_t10x_2024',
+      make: 'Togg',
+      model: 'T10X',
+      year: 2024,
+      trimOrEngine: 'V2 Uzun Menzil',
+      powertrain: PowertrainType.electric,
     );
+    await state.addGarageVehicle(togg);
+    expect(state.activeGarageVehicle?.make, 'Togg');
+    expect(state.brandTheme.id, CarBrandId.togg);
+    expect(state.isElectricVehicle, isTrue);
   });
 
-  test('Every vehicle contains detailed fastener bolt torque specifications', () {
-    for (final v in AutomotiveCatalog.vehicles) {
-      expect(v.boltTorqueSpecs, isNotEmpty);
-      expect(v.gearRatios, isNotEmpty);
-    }
-  });
-
-  testWidgets('Otonom app renders main shell and 112 emergency button', (tester) async {
+  testWidgets('Otonom v1.2.0 renders Acil single-word navigation label', (tester) async {
     final state = OtonomAppState();
     await tester.pumpWidget(OtonomApp(appState: state));
     expect(find.text('OTONOM'), findsOneWidget);
-    expect(find.text('112'), findsOneWidget);
+    expect(find.text('Rota'), findsOneWidget);
+    expect(find.text('Acil'), findsOneWidget);
+    expect(find.text('Ansiklopedi'), findsOneWidget);
+    expect(find.text('Kiralama'), findsOneWidget);
+    expect(find.text('Garajım'), findsOneWidget);
   });
 }

@@ -1,56 +1,83 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../data/mock_automotive_catalog.dart';
+import '../data/world_brands_engineering.dart';
 import '../models/brand_theme_config.dart';
 import '../models/live_api_models.dart';
-import '../models/route_station.dart';
-import '../models/vehicle_spec.dart';
+import '../models/user_garage_vehicle.dart';
 import '../services/dynamic_icon_service.dart';
 import '../services/live_apis_service.dart';
 
 class OtonomAppState extends ChangeNotifier {
   final LiveApisService liveApis = LiveApisService();
 
-  VehicleSpec _selectedVehicle = AutomotiveCatalog.vehicles.first;
-  NavigationCorridor _activeCorridor = AutomotiveCatalog.routes.first;
-  bool _isNavigating = true;
-  double _routeProgress = 0.14;
-  final Set<String> _addedWaypointStationIds = {};
+  // Personal Garage (starts completely clean — no hardcoded sample cars!)
+  final List<UserGarageVehicle> _garageVehicles = [];
+  String? _activeGarageVehicleId;
 
-  // Live Geolocation, Weather, Routing & Overpass POIs
+  // Cached Deep Encyclopedia Dossier for the user's active car
+  LiveWikipediaVehicleSummary? _activeWikiSummary;
+  List<LiveEpaVehicleSpec> _activeEpaSpecs = [];
+  List<LiveRecallItem> _activeRecalls = [];
+  List<LiveComplaintItem> _activeComplaints = [];
+  bool _isLoadingEncyclopediaDossier = false;
+
+  // Live Geolocation, Weather, Routing & Unified POIs
   LatLng _currentLocation = const LatLng(40.9903, 29.0292);
   String _locationSource = 'Başlatılıyor...';
   String _liveStreetAddress = 'Canlı adres çözümleniyor...';
   LiveRoadWeather? _liveWeather;
 
-  LatLng _destinationPoint = const LatLng(40.7654, 29.9408); // İzmit/Sapanca yönü varsayılan
+  LatLng _destinationPoint = const LatLng(40.7654, 29.9408);
   String _destinationName = 'Kocaeli / Sapanca Otoyol Aksı';
   LiveOsrmRoute? _liveRoute;
 
-  List<LivePoiItem> _liveRouteStations = [];
+  List<LivePoiItem> _liveEvStations = [];
+  List<LivePoiItem> _liveFuelStations = [];
   List<LivePoiItem> _liveTowRepairs = [];
   List<LivePoiItem> _liveRentalPlaces = [];
+  final Set<String> _addedWaypointStationIds = {};
   bool _isLoadingLive = false;
   bool _darkMapTiles = true;
 
-  String _driverName = 'Cemil & Ağabeyi';
-  String _userPlate = '34 OTN 001';
+  String _driverName = '';
+  String _userPlate = '';
   String _bloodType = 'A Rh (+)';
-  String _emergencyContact = '+90 532 100 00 00';
-  int _currentSocOrFuelPercent = 84;
-  bool _lastDynamicIconSynced = true;
+  String _emergencyContact = '';
+  int _currentSocOrFuelPercent = 80;
 
-  VehicleSpec get selectedVehicle => _selectedVehicle;
+  List<UserGarageVehicle> get garageVehicles =>
+      List.unmodifiable(_garageVehicles);
+
+  UserGarageVehicle? get activeGarageVehicle {
+    if (_garageVehicles.isEmpty) return null;
+    if (_activeGarageVehicleId != null) {
+      for (final v in _garageVehicles) {
+        if (v.id == _activeGarageVehicleId) return v;
+      }
+    }
+    return _garageVehicles.first;
+  }
 
   BrandThemeConfig get brandTheme =>
-      AutomotiveCatalog.brandThemes[_selectedVehicle.brandId] ??
-      AutomotiveCatalog.brandThemes[CarBrandId.tesla]!;
+      WorldBrandsEngineering.buildThemeForVehicle(activeGarageVehicle);
 
-  NavigationCorridor get activeCorridor => _activeCorridor;
-  bool get isNavigating => _isNavigating;
-  double get routeProgress => _routeProgress;
-  Set<String> get addedWaypointStationIds => _addedWaypointStationIds;
+  bool get isElectricVehicle =>
+      activeGarageVehicle?.powertrain.isElectric ?? false;
+
+  String get activeVehicleTitle =>
+      activeGarageVehicle?.fullTitle ?? 'Garajım’dan Kendi Aracınızı Ekleyin';
+
+  String get activeVehicleSubtitle => activeGarageVehicle != null
+      ? '${activeGarageVehicle!.powertrain.labelTr}${activeGarageVehicle!.plate.isNotEmpty ? " · ${activeGarageVehicle!.plate}" : ""}'
+      : 'Dünya üzerindeki herhangi bir aracı ekleyebilirsiniz';
+
+  LiveWikipediaVehicleSummary? get activeWikiSummary => _activeWikiSummary;
+  List<LiveEpaVehicleSpec> get activeEpaSpecs => _activeEpaSpecs;
+  List<LiveRecallItem> get activeRecalls => _activeRecalls;
+  List<LiveComplaintItem> get activeComplaints => _activeComplaints;
+  bool get isLoadingEncyclopediaDossier => _isLoadingEncyclopediaDossier;
 
   LatLng get currentLocation => _currentLocation;
   String get locationSource => _locationSource;
@@ -59,57 +86,152 @@ class OtonomAppState extends ChangeNotifier {
   LatLng get destinationPoint => _destinationPoint;
   String get destinationName => _destinationName;
   LiveOsrmRoute? get liveRoute => _liveRoute;
-  List<LivePoiItem> get liveRouteStations => _liveRouteStations;
+
+  List<LivePoiItem> get liveRouteStations =>
+      isElectricVehicle ? _liveEvStations : _liveFuelStations;
+
+  List<LivePoiItem> get liveEvStations => _liveEvStations;
+  List<LivePoiItem> get liveFuelStations => _liveFuelStations;
   List<LivePoiItem> get liveTowRepairs => _liveTowRepairs;
   List<LivePoiItem> get liveRentalPlaces => _liveRentalPlaces;
+  Set<String> get addedWaypointStationIds => _addedWaypointStationIds;
   bool get isLoadingLive => _isLoadingLive;
   bool get darkMapTiles => _darkMapTiles;
 
-  String get driverName => _driverName;
-  String get userPlate => _userPlate;
+  String get driverName => _driverName.isEmpty ? 'Sürücü' : _driverName;
+  String get userPlate => activeGarageVehicle?.plate.isNotEmpty == true
+      ? activeGarageVehicle!.plate
+      : (_userPlate.isEmpty ? 'Belirtilmedi' : _userPlate);
   String get bloodType => _bloodType;
   String get emergencyContact => _emergencyContact;
   int get currentSocOrFuelPercent => _currentSocOrFuelPercent;
-  bool get lastDynamicIconSynced => _lastDynamicIconSynced;
-
-  bool get isElectricVehicle => _selectedVehicle.powertrain.isElectric;
 
   int get onlineApiCount =>
       liveApis.statuses.values.where((s) => s.online).length;
 
-  /// Offline/curated fallback stations when user has no internet
-  List<RouteStation> get relevantRouteStations {
-    final targetCategory = isElectricVehicle
-        ? StationCategory.evCharger
-        : StationCategory.fuelStation;
-    final list = _activeCorridor.stations
-        .where((s) => s.category == targetCategory)
-        .toList();
-    list.sort(
-      (a, b) => a.distanceAlongRouteKm.compareTo(b.distanceAlongRouteKm),
-    );
-    return list;
-  }
-
   Future<void> loadSavedPreferences() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final savedVehicleId = prefs.getString('selected_vehicle_id');
-      if (savedVehicleId != null) {
-        final match = AutomotiveCatalog.vehicles
-            .where((v) => v.id == savedVehicleId)
-            .toList();
-        if (match.isNotEmpty) {
-          _selectedVehicle = match.first;
-        }
+      final rawList = prefs.getString('user_garage_vehicles_v2');
+      if (rawList != null && rawList.isNotEmpty) {
+        final decoded = jsonDecode(rawList) as List<dynamic>;
+        _garageVehicles
+          ..clear()
+          ..addAll(
+            decoded.map(
+              (e) => UserGarageVehicle.fromJson(e as Map<String, dynamic>),
+            ),
+          );
       }
-      _userPlate = prefs.getString('user_plate') ?? _userPlate;
-      _bloodType = prefs.getString('blood_type') ?? _bloodType;
+      _activeGarageVehicleId = prefs.getString('active_garage_vehicle_id_v2');
+      _driverName = prefs.getString('driver_name') ?? '';
+      _userPlate = prefs.getString('user_plate') ?? '';
+      _bloodType = prefs.getString('blood_type') ?? 'A Rh (+)';
+      _emergencyContact = prefs.getString('emergency_contact') ?? '';
       notifyListeners();
+
+      if (activeGarageVehicle != null) {
+        await refreshActiveVehicleEncyclopediaDossier();
+      }
     } catch (_) {}
   }
 
-  /// Connects to GPS/GeoJS, Nominatim, Open-Meteo, OSRM & Overpass APIs live!
+  Future<void> _persistGarage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final encoded =
+          jsonEncode(_garageVehicles.map((v) => v.toJson()).toList());
+      await prefs.setString('user_garage_vehicles_v2', encoded);
+      if (_activeGarageVehicleId != null) {
+        await prefs.setString(
+          'active_garage_vehicle_id_v2',
+          _activeGarageVehicleId!,
+        );
+      } else {
+        await prefs.remove('active_garage_vehicle_id_v2');
+      }
+    } catch (_) {}
+  }
+
+  Future<void> addGarageVehicle(UserGarageVehicle vehicle) async {
+    _garageVehicles.insert(0, vehicle);
+    _activeGarageVehicleId = vehicle.id;
+    notifyListeners();
+
+    await _persistGarage();
+    await DynamicIconService.setBrandAppIcon(brandTheme.dynamicIconKey);
+    await refreshActiveVehicleEncyclopediaDossier();
+  }
+
+  Future<void> selectActiveGarageVehicle(String id) async {
+    _activeGarageVehicleId = id;
+    _addedWaypointStationIds.clear();
+    notifyListeners();
+
+    await _persistGarage();
+    await DynamicIconService.setBrandAppIcon(brandTheme.dynamicIconKey);
+    await refreshActiveVehicleEncyclopediaDossier();
+  }
+
+  Future<void> removeGarageVehicle(String id) async {
+    _garageVehicles.removeWhere((v) => v.id == id);
+    if (_activeGarageVehicleId == id) {
+      _activeGarageVehicleId =
+          _garageVehicles.isNotEmpty ? _garageVehicles.first.id : null;
+    }
+    if (_garageVehicles.isEmpty) {
+      _activeWikiSummary = null;
+      _activeEpaSpecs = [];
+      _activeRecalls = [];
+      _activeComplaints = [];
+    }
+    notifyListeners();
+    await _persistGarage();
+    if (activeGarageVehicle != null) {
+      await refreshActiveVehicleEncyclopediaDossier();
+    }
+  }
+
+  /// Pulls live Wikipedia photo/history, EPA specs, NHTSA recalls & complaints for the active car!
+  Future<void> refreshActiveVehicleEncyclopediaDossier([
+    UserGarageVehicle? customTarget,
+  ]) async {
+    final v = customTarget ?? activeGarageVehicle;
+    if (v == null) return;
+
+    _isLoadingEncyclopediaDossier = true;
+    notifyListeners();
+
+    try {
+      final yearStr = v.year.toString();
+      final results = await Future.wait([
+        liveApis.fetchVehicleWikipediaSummary(make: v.make, model: v.model),
+        liveApis.fetchEpaVehicleSpecs(
+          year: yearStr,
+          make: v.make,
+          model: v.model,
+        ),
+        liveApis.fetchRecallsAndComplaints(
+          make: v.make,
+          model: v.model,
+          year: yearStr,
+        ),
+      ]);
+
+      _activeWikiSummary = results[0] as LiveWikipediaVehicleSummary?;
+      _activeEpaSpecs = results[1] as List<LiveEpaVehicleSpec>;
+      final safety = results[2]
+          as ({List<LiveRecallItem> recalls, List<LiveComplaintItem> complaints});
+      _activeRecalls = safety.recalls;
+      _activeComplaints = safety.complaints;
+    } catch (_) {
+    } finally {
+      _isLoadingEncyclopediaDossier = false;
+      notifyListeners();
+    }
+  }
+
+  /// Connects to GPS/GeoJS, Nominatim, Open-Meteo, OSRM & Unified Overpass+Photon POIs!
   Future<void> refreshAllLiveApis() async {
     if (_isLoadingLive) return;
     _isLoadingLive = true;
@@ -121,50 +243,29 @@ class OtonomAppState extends ChangeNotifier {
       _locationSource = loc.source;
       notifyListeners();
 
-      // Run Reverse Geocoding, Weather & OSRM Routing in parallel
-      final addrFuture = liveApis.reverseGeocodeAddress(_currentLocation);
-      final weatherFuture = liveApis.fetchRoadWeather(_currentLocation);
-      final routeFuture =
-          liveApis.fetchDrivingRoute(_currentLocation, _destinationPoint);
-
-      final results = await Future.wait([addrFuture, weatherFuture, routeFuture]);
+      final results = await Future.wait([
+        liveApis.reverseGeocodeAddress(_currentLocation),
+        liveApis.fetchRoadWeather(_currentLocation),
+        liveApis.fetchDrivingRoute(_currentLocation, _destinationPoint),
+      ]);
       _liveStreetAddress = results[0] as String;
       _liveWeather = results[1] as LiveRoadWeather?;
       _liveRoute = results[2] as LiveOsrmRoute?;
       notifyListeners();
 
-      // Fetch live Overpass POIs for EV/Fuel stations, Tow/Repair, and Car Rentals
-      await _refreshStationPoisOnly();
-      final towFuture = liveApis.fetchNearbyAutomotivePois(
+      final unified = await liveApis.fetchAllAutomotivePoisUnified(
         center: _currentLocation,
-        category: 'tow_repair',
-        radiusMeters: 10000,
+        routePolyline: _liveRoute?.polyline ?? const [],
       );
-      final rentFuture = liveApis.fetchNearbyAutomotivePois(
-        center: _currentLocation,
-        category: 'car_rental',
-        radiusMeters: 15000,
-      );
-      final poiResults = await Future.wait([towFuture, rentFuture]);
-      _liveTowRepairs = poiResults[0];
-      _liveRentalPlaces = poiResults[1];
+      _liveEvStations = unified.evStations;
+      _liveFuelStations = unified.fuelStations;
+      _liveTowRepairs = unified.towRepairs;
+      _liveRentalPlaces = unified.carRentals;
     } catch (_) {
-      // Graceful fallback preserved
     } finally {
       _isLoadingLive = false;
       notifyListeners();
     }
-  }
-
-  Future<void> _refreshStationPoisOnly() async {
-    final cat = isElectricVehicle ? 'ev' : 'fuel';
-    _liveRouteStations = await liveApis.fetchNearbyAutomotivePois(
-      center: _currentLocation,
-      category: cat,
-      sampleAlongPolyline: _liveRoute?.polyline ?? const [],
-      radiusMeters: 15000,
-    );
-    notifyListeners();
   }
 
   Future<void> setLiveDestination(LivePlaceSearchResult dest) async {
@@ -176,7 +277,12 @@ class OtonomAppState extends ChangeNotifier {
     try {
       _liveRoute =
           await liveApis.fetchDrivingRoute(_currentLocation, _destinationPoint);
-      await _refreshStationPoisOnly();
+      final unified = await liveApis.fetchAllAutomotivePoisUnified(
+        center: _currentLocation,
+        routePolyline: _liveRoute?.polyline ?? const [],
+      );
+      _liveEvStations = unified.evStations;
+      _liveFuelStations = unified.fuelStations;
     } finally {
       _isLoadingLive = false;
       notifyListeners();
@@ -185,53 +291,6 @@ class OtonomAppState extends ChangeNotifier {
 
   void toggleMapTileStyle() {
     _darkMapTiles = !_darkMapTiles;
-    notifyListeners();
-  }
-
-  Future<void> selectGarageVehicle(VehicleSpec vehicle) async {
-    final previousIsEv = isElectricVehicle;
-    _selectedVehicle = vehicle;
-    _addedWaypointStationIds.clear();
-    notifyListeners();
-
-    final theme = brandTheme;
-    _lastDynamicIconSynced =
-        await DynamicIconService.setBrandAppIcon(theme.dynamicIconKey);
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('selected_vehicle_id', vehicle.id);
-    } catch (_) {}
-
-    if (previousIsEv != isElectricVehicle) {
-      await _refreshStationPoisOnly();
-    }
-    notifyListeners();
-  }
-
-  void selectCorridor(NavigationCorridor corridor) {
-    _activeCorridor = corridor;
-    _routeProgress = 0.08;
-    _addedWaypointStationIds.clear();
-    notifyListeners();
-  }
-
-  void toggleNavigation() {
-    _isNavigating = !_isNavigating;
-    notifyListeners();
-  }
-
-  void updateRouteProgress(double value) {
-    _routeProgress = value.clamp(0.0, 1.0);
-    notifyListeners();
-  }
-
-  void toggleWaypointStation(String stationId) {
-    if (_addedWaypointStationIds.contains(stationId)) {
-      _addedWaypointStationIds.remove(stationId);
-    } else {
-      _addedWaypointStationIds.add(stationId);
-    }
     notifyListeners();
   }
 
@@ -248,8 +307,10 @@ class OtonomAppState extends ChangeNotifier {
     notifyListeners();
     try {
       final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('driver_name', driverName);
       await prefs.setString('user_plate', plate);
       await prefs.setString('blood_type', bloodType);
+      await prefs.setString('emergency_contact', emergencyContact);
     } catch (_) {}
   }
 
