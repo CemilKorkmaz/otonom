@@ -1,7 +1,7 @@
 name: otonom
-description: "Otonom - Dinamik Marka Temalı Akıllı Otomobil Süper Uygulaması (Navigasyon, Çekici, 112 SOS, Araç Ansiklopedisi, P2P Kiralama)"
+description: "Otonom - Canlı Harita, GPS, OSRM Rota, Overpass Şarj/Benzin/Çekici, NHTSA & EPA API Bağlantılı Otomobil Süper Uygulaması"
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -13,6 +13,9 @@ dependencies:
   http: ^1.2.2
   url_launcher: ^6.3.1
   shared_preferences: ^2.3.2
+  flutter_map: '>=7.0.2 <9.0.0'
+  latlong2: ^0.9.1
+  geolocator: '>=13.0.0 <15.0.0'
 
 dev_dependencies:
   flutter_test:

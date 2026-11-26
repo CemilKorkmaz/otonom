@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'screens/home_shell.dart';
 import 'state/app_state.dart';
@@ -6,6 +7,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final appState = OtonomAppState();
   await appState.loadSavedPreferences();
+  // Fire live GPS, Nominatim, Open-Meteo, OSRM & Overpass APIs asynchronously
+  unawaited(appState.refreshAllLiveApis());
   runApp(OtonomApp(appState: appState));
 }
 

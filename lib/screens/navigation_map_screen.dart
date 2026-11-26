@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import '../data/mock_automotive_catalog.dart';
 import '../models/brand_theme_config.dart';
-import '../models/route_station.dart';
+import '../models/live_api_models.dart';
+import '../services/emergency_service.dart';
 import '../state/app_state.dart';
-import '../widgets/interactive_cockpit_map.dart';
+import '../widgets/live_osm_cockpit_map.dart';
 
-class NavigationMapScreen extends StatelessWidget {
+class NavigationMapScreen extends StatefulWidget {
   final OtonomAppState appState;
   final VoidCallback onOpenTowQuick;
   final VoidCallback onOpen112Quick;
@@ -18,31 +19,58 @@ class NavigationMapScreen extends StatelessWidget {
   });
 
   @override
+  State<NavigationMapScreen> createState() => _NavigationMapScreenState();
+}
+
+class _NavigationMapScreenState extends State<NavigationMapScreen> {
+  final TextEditingController _destSearchCtrl = TextEditingController();
+  List<LivePlaceSearchResult> _searchResults = [];
+  bool _searchingPlace = false;
+
+  @override
+  void dispose() {
+    _destSearchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _runPlaceSearch() async {
+    final q = _destSearchCtrl.text.trim();
+    if (q.isEmpty) return;
+    setState(() => _searchingPlace = true);
+    final res = await widget.appState.liveApis.searchPlaces(q);
+    if (mounted) {
+      setState(() {
+        _searchResults = res;
+        _searchingPlace = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final appState = widget.appState;
     final theme = appState.brandTheme;
     final vehicle = appState.selectedVehicle;
-    final corridor = appState.activeCorridor;
-    final stations = appState.relevantRouteStations;
     final isEv = appState.isElectricVehicle;
-    final traveledKm = corridor.totalDistanceKm * appState.routeProgress;
-    final remainingKm =
-        (corridor.totalDistanceKm - traveledKm).clamp(0.0, corridor.totalDistanceKm);
+    final weather = appState.liveWeather;
+    final osrm = appState.liveRoute;
+    final livePois = appState.liveRouteStations;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
       children: [
-        // Active Vehicle Telemetry & Quick Brand Switcher Strip
+        // Active Vehicle + Brand Switcher Banner
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             gradient: LinearGradient(
               colors: [
-                theme.primaryColor.withValues(alpha: 0.24),
+                theme.primaryColor.withValues(alpha: 0.26),
                 theme.cardColor,
               ],
             ),
-            border: Border.all(color: theme.primaryColor.withValues(alpha: 0.45)),
+            border: Border.all(color: theme.primaryColor.withValues(alpha: 0.5)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -56,7 +84,7 @@ class NavigationMapScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
-                      isEv ? '⚡ ELEKTRİKLİ ROTA MODU' : '⛽ AKARYAKIT ROTA MODU',
+                      isEv ? '⚡ CANLI EV ŞARJ ROTASI' : '⛽ CANLI AKARYAKIT ROTASI',
                       style: const TextStyle(
                         fontSize: 10.5,
                         fontWeight: FontWeight.w800,
@@ -65,34 +93,56 @@ class NavigationMapScreen extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
-                  Text(
-                    '${isEv ? "Batarya" : "Depo"}: %${appState.currentSocOrFuelPercent}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                  if (appState.isLoadingLive)
+                    const SizedBox(
+                      width: 15,
+                      height: 15,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else
+                    InkWell(
+                      onTap: appState.refreshAllLiveApis,
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.gps_fixed_rounded,
+                            size: 14,
+                            color: Color(0xFF34D399),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            appState.locationSource.split(' ').take(2).join(' '),
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF34D399),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Text(
                 '${vehicle.brandName} ${vehicle.modelName}',
                 style: const TextStyle(
                   fontSize: 18,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w900,
                   color: Colors.white,
                 ),
               ),
               const SizedBox(height: 3),
               Text(
-                theme.slogan,
+                '📍 Konum: ${appState.liveStreetAddress}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 12.5,
-                  color: Colors.white.withValues(alpha: 0.72),
+                  fontSize: 11.5,
+                  color: Colors.white.withValues(alpha: 0.75),
                 ),
               ),
-              const SizedBox(height: 12),
-              // Quick Brand Test Bar
+              const SizedBox(height: 10),
               SizedBox(
                 height: 34,
                 child: ListView.separated(
@@ -101,12 +151,11 @@ class NavigationMapScreen extends StatelessWidget {
                   separatorBuilder: (_, __) => const SizedBox(width: 8),
                   itemBuilder: (context, index) {
                     final v = AutomotiveCatalog.vehicles[index];
-                    final selected = v.id == vehicle.id;
                     return ChoiceChip(
                       label: Text(
                         '${v.brandName} (${v.powertrain.isElectric ? "EV" : "Benzin"})',
                       ),
-                      selected: selected,
+                      selected: v.id == vehicle.id,
                       onSelected: (_) => appState.selectGarageVehicle(v),
                     );
                   },
@@ -115,41 +164,74 @@ class NavigationMapScreen extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
 
-        // Emergency Quick Actions Row (Nearest Tow Truck & 112 Crash Button)
+        // Live Open-Meteo Road & Weather Telemetry Strip
+        if (weather != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+            margin: const EdgeInsets.only(bottom: 10),
+            decoration: BoxDecoration(
+              color: theme.cardColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.thermostat_rounded, size: 18, color: Color(0xFF38BDF8)),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Canlı Yol Hava (Open-Meteo): ${weather.temperatureC.toStringAsFixed(1)}°C · ${weather.conditionTr}',
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  weather.drivingAdvisoryTr,
+                  style: const TextStyle(fontSize: 11.5, color: Colors.white70),
+                ),
+              ],
+            ),
+          ),
+
+        // Emergency Quick Triggers
         Row(
           children: [
             Expanded(
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
-                onTap: onOpenTowQuick,
+                onTap: widget.onOpenTowQuick,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                   decoration: BoxDecoration(
                     color: const Color(0xFF231B0C),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: const Color(0xFFF59E0B)),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.fire_truck_rounded, color: Color(0xFFFBBF24)),
-                      SizedBox(width: 8),
+                      const Icon(Icons.fire_truck_rounded, color: Color(0xFFFBBF24)),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
+                            const Text(
                               'En Yakın Çekici',
                               style: TextStyle(
                                 fontWeight: FontWeight.w800,
                                 fontSize: 13,
-                                color: Colors.white,
                               ),
                             ),
                             Text(
-                              '0.9 km · 4 dk uzaklıkta',
-                              style: TextStyle(
+                              appState.liveTowRepairs.isNotEmpty
+                                  ? '${appState.liveTowRepairs.first.distanceKm.toStringAsFixed(1)} km (Canlı OSM)'
+                                  : 'Radar & Arama Ekranı',
+                              style: const TextStyle(
                                 fontSize: 11,
                                 color: Color(0xFFFDE68A),
                               ),
@@ -166,9 +248,9 @@ class NavigationMapScreen extends StatelessWidget {
             Expanded(
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
-                onTap: onOpen112Quick,
+                onTap: widget.onOpen112Quick,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                   decoration: BoxDecoration(
                     color: const Color(0xFF2B0B10),
                     borderRadius: BorderRadius.circular(16),
@@ -187,11 +269,10 @@ class NavigationMapScreen extends StatelessWidget {
                               style: TextStyle(
                                 fontWeight: FontWeight.w900,
                                 fontSize: 13,
-                                color: Colors.white,
                               ),
                             ),
                             Text(
-                              'Tek Tuş Sesli 112 Çağrı',
+                              'Canlı Adres + 112 Ara',
                               style: TextStyle(
                                 fontSize: 11,
                                 color: Color(0xFFFECACA),
@@ -207,134 +288,145 @@ class NavigationMapScreen extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
 
-        // Route Selector
+        // Live Nominatim Destination Search Bar
         Row(
           children: [
-            const Icon(Icons.route_rounded, size: 18, color: Colors.white70),
-            const SizedBox(width: 6),
-            const Text(
-              'Aktif Navigasyon Rotası:',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
-            ),
-            const Spacer(),
-            DropdownButton<String>(
-              value: corridor.id,
-              dropdownColor: theme.cardColor,
-              underline: const SizedBox.shrink(),
-              items: AutomotiveCatalog.routes
-                  .map(
-                    (r) => DropdownMenuItem(
-                      value: r.id,
-                      child: Text(
-                        '${r.originName.split(" ").first} → ${r.destinationName.split(" ").first}',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                      ),
+            Expanded(
+              child: TextField(
+                controller: _destSearchCtrl,
+                onSubmitted: (_) => _runPlaceSearch(),
+                decoration: InputDecoration(
+                  hintText: 'Hedef ara (Örn: Ankara, Taksim, Bursa, İzmir)...',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  isDense: true,
+                  filled: true,
+                  fillColor: theme.cardColor,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: theme.primaryColor.withValues(alpha: 0.4),
                     ),
-                  )
-                  .toList(),
-              onChanged: (id) {
-                if (id == null) return;
-                final found =
-                    AutomotiveCatalog.routes.firstWhere((r) => r.id == id);
-                appState.selectCorridor(found);
-              },
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: _searchingPlace ? null : _runPlaceSearch,
+              child: Text(_searchingPlace ? '...' : 'Rota Bul'),
             ),
           ],
         ),
-        const SizedBox(height: 8),
 
-        // Interactive Navigation Map
+        if (_searchResults.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.only(top: 8),
+            decoration: BoxDecoration(
+              color: theme.cardColor,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: theme.primaryColor),
+            ),
+            child: Column(
+              children: _searchResults
+                  .map(
+                    (place) => ListTile(
+                      dense: true,
+                      leading: Icon(Icons.place_rounded, color: theme.primaryColor),
+                      title: Text(
+                        place.shortName,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      subtitle: Text(
+                        place.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: const Text('Seç →'),
+                      onTap: () {
+                        setState(() => _searchResults = []);
+                        appState.setLiveDestination(place);
+                      },
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+
+        const SizedBox(height: 12),
+
+        // LIVE OPENSTREETMAP + OSRM POLYLINE + OVERPASS STATIONS
         SizedBox(
-          height: 255,
-          child: InteractiveCockpitMap(
-            mode: CockpitMapMode.navigation,
+          height: 295,
+          child: LiveOsmCockpitMap(
+            userLocation: appState.currentLocation,
+            destinationPoint: appState.destinationPoint,
+            routePolyline: osrm?.polyline ?? const [],
+            pois: livePois,
             accentColor: theme.primaryColor,
-            isElectric: isEv,
-            routeProgress: appState.routeProgress,
-            stations: stations,
-            waypointIds: appState.addedWaypointStationIds,
-            onStationTap: (station) => _showStationSheet(context, station, isEv),
+            darkTiles: appState.darkMapTiles,
+            onToggleTileStyle: appState.toggleMapTileStyle,
+            onRecenterGps: appState.refreshAllLiveApis,
+            onPoiTap: (poi) => _showLivePoiSheet(context, poi),
           ),
         ),
         const SizedBox(height: 12),
 
-        // Live Navigation HUD & Progress Simulator
+        // Live OSRM Route Summary Card
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: theme.cardColor,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.white10),
+            border: Border.all(color: Colors.white12),
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
+                  Icon(Icons.alt_route_rounded, color: theme.primaryColor),
+                  const SizedBox(width: 8),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${corridor.originName} → ${corridor.destinationName}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          'Kalan: ${remainingKm.toStringAsFixed(1)} km · ${corridor.highwaySummary}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.white70,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      'Hedef: ${appState.destinationName}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14.5,
+                      ),
                     ),
                   ),
-                  FilledButton.icon(
-                    onPressed: appState.toggleNavigation,
-                    icon: Icon(
-                      appState.isNavigating
-                          ? Icons.pause_circle_filled_rounded
-                          : Icons.navigation_rounded,
-                      size: 18,
+                  if (osrm != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: theme.primaryColor,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${osrm.distanceKm.toStringAsFixed(1)} km · ${osrm.durationMinutes} dk',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
+                        ),
+                      ),
                     ),
-                    label: Text(appState.isNavigating ? 'Canlı Rota' : 'Başlat'),
-                  ),
                 ],
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Text(
-                    'Yolculuk Konumu:',
-                    style: TextStyle(fontSize: 11.5, color: Colors.white70),
-                  ),
-                  Expanded(
-                    child: Slider(
-                      value: appState.routeProgress,
-                      activeColor: theme.primaryColor,
-                      onChanged: appState.updateRouteProgress,
-                    ),
-                  ),
-                  Text(
-                    '${traveledKm.toStringAsFixed(0)} km',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
+              if (osrm != null && osrm.stepInstructions.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'İlk Yönlendirme: ${osrm.stepInstructions.first}',
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF93C5FD)),
+                ),
+              ],
             ],
           ),
         ),
         const SizedBox(height: 18),
 
-        // Powertrain-aware Stations Header
+        // LIVE OVERPASS STATIONS LIST
         Row(
           children: [
             Icon(
@@ -345,210 +437,192 @@ class NavigationMapScreen extends StatelessWidget {
             Expanded(
               child: Text(
                 isEv
-                    ? 'Yol Üstü Şarj İstasyonları (${vehicle.brandName} EV)'
-                    : 'Yol Üstü Akaryakıt İstasyonları (${vehicle.brandName} Benzin)',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                ),
+                    ? 'Canlı Şarj İstasyonları (${livePois.length} Gerçek Nokta)'
+                    : 'Canlı Akaryakıt İstasyonları (${livePois.length} Gerçek Nokta)',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
               ),
+            ),
+            IconButton(
+              tooltip: 'Canlı İstasyonları Yenile',
+              onPressed: appState.refreshAllLiveApis,
+              icon: const Icon(Icons.refresh_rounded, size: 20),
             ),
           ],
         ),
-        const SizedBox(height: 4),
-        Text(
-          isEv
-              ? 'Aracınız elektrikli olduğu için rotanızdaki yüksek hızlı DC şarj istasyonları, kaç km kaldığı ve varış batarya yüzdesi listeleniyor.'
-              : 'Aracınız içten yanmalı olduğu için rotanızdaki akaryakıt istasyonları, kaç km uzakta oldukları ve güncel litre fiyatları listeleniyor.',
-          style: const TextStyle(fontSize: 12, color: Colors.white60),
+        const Text(
+          'OpenStreetMap Overpass API üzerinden gerçek GPS konumunuz ve OSRM yol güzergâhınız üzerindeki istasyonlar çekilmektedir.',
+          style: TextStyle(fontSize: 11.5, color: Colors.white60),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
 
-        for (final station in stations)
-          _RouteStationCard(
-            station: station,
-            traveledKm: traveledKm,
-            isEv: isEv,
-            accentColor: theme.primaryColor,
-            cardColor: theme.cardColor,
-            isAdded: appState.addedWaypointStationIds.contains(station.id),
-            onToggleWaypoint: () => appState.toggleWaypointStation(station.id),
-          ),
+        if (livePois.isNotEmpty)
+          for (final poi in livePois)
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: theme.cardColor,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: appState.addedWaypointStationIds.contains(poi.id)
+                      ? theme.primaryColor
+                      : Colors.white10,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: theme.primaryColor.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${poi.distanceKm.toStringAsFixed(1)} km uzakta',
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      const Text(
+                        '🟢 Canlı OSM',
+                        style: TextStyle(fontSize: 11, color: Color(0xFF34D399)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 7),
+                  Text(
+                    poi.name,
+                    style: const TextStyle(
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    poi.subtitle,
+                    style: const TextStyle(fontSize: 12.5, color: Colors.white70),
+                  ),
+                  if (poi.address != null) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      '📍 ${poi.address}',
+                      style: const TextStyle(fontSize: 11.5, color: Colors.white54),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          poi.tags.join(' · '),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF93C5FD),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () => appState.setLiveDestination(
+                          LivePlaceSearchResult(
+                            displayName: poi.name,
+                            shortName: poi.name,
+                            point: poi.point,
+                          ),
+                        ),
+                        icon: const Icon(Icons.turn_right_rounded, size: 16),
+                        label: const Text('Buraya Rota Çiz'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            )
+        else
+          // Offline fallback cards if user is temporarily offline
+          for (final st in appState.relevantRouteStations)
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: theme.cardColor,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                '${st.name} — +${st.distanceAlongRouteKm} km (Çevrimdışı Yedek Veri)',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
       ],
     );
   }
 
-  void _showStationSheet(
-    BuildContext context,
-    RouteStation station,
-    bool isEv,
-  ) {
+  void _showLivePoiSheet(BuildContext context, LivePoiItem poi) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: appState.brandTheme.cardColor,
+      backgroundColor: widget.appState.brandTheme.cardColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) {
-        final added = appState.addedWaypointStationIds.contains(station.id);
-        return Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                station.name,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                isEv
-                    ? '${station.operatorBrand} · ${station.connectorTypes} · ₺${station.pricePerKwhTry}/kWh'
-                    : '${station.operatorBrand} · Kurşunsuz 95: ₺${station.gasoline95PriceTry}/L · Motorin: ₺${station.dieselPriceTry}/L',
-                style: const TextStyle(color: Colors.white70),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: station.amenities
-                    .map((a) => Chip(label: Text(a)))
-                    .toList(),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () {
-                    appState.toggleWaypointStation(station.id);
-                    Navigator.pop(ctx);
-                  },
-                  icon: Icon(added ? Icons.check_circle : Icons.add_location_alt),
-                  label: Text(
-                    added ? 'Rotaya Eklendi (Kaldır)' : 'Bu İstasyonu Rotaya Ekle',
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              poi.name,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 6),
+            Text(poi.subtitle, style: const TextStyle(color: Colors.white70)),
+            const SizedBox(height: 4),
+            Text(
+              'Uzaklık: ${poi.distanceKm.toStringAsFixed(2)} km · Koordinat: ${poi.point.latitude.toStringAsFixed(4)}, ${poi.point.longitude.toStringAsFixed(4)}',
+              style: const TextStyle(fontSize: 12, color: Colors.white54),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                if (poi.phone != null) ...[
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => EmergencyService.dialPhoneNumber(poi.phone!),
+                      icon: const Icon(Icons.call_rounded),
+                      label: const Text('İstasyonu Ara'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      widget.appState.setLiveDestination(
+                        LivePlaceSearchResult(
+                          displayName: poi.name,
+                          shortName: poi.name,
+                          point: poi.point,
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.navigation_rounded),
+                    label: const Text('Rota Başlat'),
                   ),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _RouteStationCard extends StatelessWidget {
-  final RouteStation station;
-  final double traveledKm;
-  final bool isEv;
-  final Color accentColor;
-  final Color cardColor;
-  final bool isAdded;
-  final VoidCallback onToggleWaypoint;
-
-  const _RouteStationCard({
-    required this.station,
-    required this.traveledKm,
-    required this.isEv,
-    required this.accentColor,
-    required this.cardColor,
-    required this.isAdded,
-    required this.onToggleWaypoint,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final deltaKm = station.distanceAlongRouteKm - traveledKm;
-    final passed = deltaKm < 0;
-    final distanceLabel = passed
-        ? '${deltaKm.abs().toStringAsFixed(1)} km geride kaldı'
-        : '${deltaKm.toStringAsFixed(1)} km ileride';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isAdded ? accentColor : Colors.white.withValues(alpha: 0.08),
-          width: isAdded ? 1.6 : 1.0,
+              ],
+            ),
+          ],
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                decoration: BoxDecoration(
-                  color: passed
-                      ? Colors.white10
-                      : accentColor.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  distanceLabel,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w800,
-                    color: passed ? Colors.white54 : Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '+${station.detourMinutes} dk sapma',
-                style: const TextStyle(fontSize: 11.5, color: Colors.white60),
-              ),
-              const Spacer(),
-              if (isEv && station.availableStalls != null)
-                Text(
-                  '${station.availableStalls}/${station.totalStalls} Soket Boş',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF34D399),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            station.name,
-            style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            isEv
-                ? '⚡ ${station.maxPowerKw} kW DC (${station.connectorTypes}) · ₺${station.pricePerKwhTry}/kWh · Tahmini Varış Şarjı: %${station.estimatedArrivalSocPercent}'
-                : '⛽ Kurşunsuz 95: ₺${station.gasoline95PriceTry}/L · Motorin: ₺${station.dieselPriceTry}/L${station.lpgPriceTry != null ? " · LPG: ₺${station.lpgPriceTry}/L" : ""}',
-            style: const TextStyle(fontSize: 12.5, color: Colors.white70),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  station.amenities.join(' · '),
-                  style: const TextStyle(fontSize: 11.5, color: Colors.white54),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
-                onPressed: onToggleWaypoint,
-                icon: Icon(
-                  isAdded ? Icons.check_rounded : Icons.add_road_rounded,
-                  size: 16,
-                ),
-                label: Text(isAdded ? 'Durak Eklendi' : 'Durak Ekle'),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }

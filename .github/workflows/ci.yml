@@ -63,27 +63,27 @@ jobs:
       - name: Run Flutter unit & widget tests
         run: flutter test
 
-      - name: Build Installable Android Release APK
+      - name: Build Installable Android Release APK (v1.1.0 Live APIs)
         run: |
           flutter build apk --release
-          cp build/app/outputs/flutter-apk/app-release.apk otonom-v1.0.0-android.apk
-          ls -lh otonom-v1.0.0-android.apk
+          cp build/app/outputs/flutter-apk/app-release.apk otonom-v1.1.0-android.apk
+          ls -lh otonom-v1.1.0-android.apk
 
       - name: Upload APK Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: otonom-v1.0.0-android-apk
-          path: otonom-v1.0.0-android.apk
+          name: otonom-v1.1.0-android-apk
+          path: otonom-v1.1.0-android.apk
 
-      - name: Publish GitHub Release with Direct APK Download
+      - name: Publish GitHub Release v1.1.0 with Direct APK Download
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if gh release view v1.0.0 >/dev/null 2>&1; then
-            gh release upload v1.0.0 otonom-v1.0.0-android.apk --clobber
+          if gh release view v1.1.0 >/dev/null 2>&1; then
+            gh release upload v1.1.0 otonom-v1.1.0-android.apk --clobber
           else
-            gh release create v1.0.0 otonom-v1.0.0-android.apk \
+            gh release create v1.1.0 otonom-v1.1.0-android.apk \
               --target "${{ github.sha }}" \
-              --title "Otonom v1.0.0 — Android Kurulum Paketi (APK)" \
-              --notes "Otonom v1.0.0 Android sürümü! Telefonunuza doğrudan **otonom-v1.0.0-android.apk** dosyasını indirip kurabilirsiniz. Garajım sekmesinden Tesla, BMW M, Togg, Mercedes-AMG, Porsche veya Audi seçtiğinizde hem uygulama teması/rota istasyonları hem de telefonunuzun ana ekranındaki Otonom logosu otomatik olarak değişir."
+              --title "Otonom v1.1.0 — Canlı GPS, Harita, OSRM, Overpass, NHTSA & EPA API Sürümü" \
+              --notes "public-apis ve OpenStreetMap ekosisteminden 7 gerçek canlı API bağlandı: (1) Gerçek Cihaz GPS + GeoJS IP Konumu, (2) Nominatim Canlı Sokak/Mahalle Açık Adres & Hedef Arama, (3) Gerçek Etkileşimli Harita + OSRM Karayolu Rota Çizimi, (4) Overpass API ile konumunuzdaki gerçek Şarj İstasyonları, Benzinlikler, Oto Servis/Yol Yardım ve Kiralama noktaları, (5) Open-Meteo Canlı Yol Hava & Gizli Buzlanma Telemetrisi, (6) NHTSA 10.000+ Araç Modeli + Geri Çağırma (Recall) + Kronik Şikayetler + 17 Haneli VIN Çözücü, (7) EPA FuelEconomy.gov Canlı Fabrika Tüketim & Motor Verileri."
           fi
