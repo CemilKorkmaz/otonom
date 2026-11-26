@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Otonom — Dinamik Marka Temalı Akıllı Otomobil Süper Uygulaması</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="studio-layout">
+    <!-- Interactive iOS/Android Mobile App Shell -->
+    <main class="phone-shell" id="phoneShell">
+      <header class="app-topbar">
+        <div class="brand-lockup">
+          <div class="brand-crest-box" id="headerCrest"></div>
+          <div style="min-width:0">
+            <div class="brand-title-row">
+              <span class="app-wordmark">OTONOM</span>
+              <span class="brand-pill" id="headerBrandShort">TESLA</span>
+            </div>
+            <div class="active-car-sub" id="headerCarModel">Model Y Performance AWD</div>
+          </div>
+        </div>
+        <button class="btn-112-top" id="topSosBtn" title="Acil Kaza 112 Çağrısı">
+          <span>🚨</span>
+          <span>112 ACİL</span>
+        </button>
+      </header>
+
+      <section class="screen-viewport" id="screenViewport"></section>
+
+      <nav class="bottom-nav" id="bottomNav">
+        <button class="nav-item active" data-tab="nav">
+          <span class="nav-icon">🧭</span>
+          <span>Rota</span>
+        </button>
+        <button class="nav-item" data-tab="sos">
+          <span class="nav-icon">🛻</span>
+          <span>Çekici & 112</span>
+        </button>
+        <button class="nav-item" data-tab="wiki">
+          <span class="nav-icon">🔩</span>
+          <span>Ansiklopedi</span>
+        </button>
+        <button class="nav-item" data-tab="rent">
+          <span class="nav-icon">🔑</span>
+          <span>Kiralama</span>
+        </button>
+        <button class="nav-item" data-tab="garage">
+          <span class="nav-icon">🏎️</span>
+          <span>Garajım</span>
+        </button>
+      </nav>
+
+      <!-- Dynamic Modal Layer -->
+      <div id="modalContainer"></div>
+    </main>
+
+    <!-- Desktop Companion Showcase: Live Home Screen Dynamic Icon & Brand Engine -->
+    <aside class="desktop-showcase">
+      <div class="showcase-card">
+        <div style="font-size:11px; font-weight:800; letter-spacing:1px; color:var(--brand-secondary); text-transform:uppercase;">
+          iOS & Android Flutter Canlı Önizleme
+        </div>
+        <h2 style="font-size:22px; font-weight:900; margin-top:6px;">
+          OTONOM × <span id="sideBrandTitle">Tesla</span>
+        </h2>
+        <p style="font-size:13px; color:var(--text-muted); margin-top:6px; line-height:1.5;">
+          Profilinizden aracınızı seçtiğiniz anda uygulamanın <strong>ana ekran ikonu</strong>, <strong>kokpit renk teması</strong> ve <strong>navigasyon istasyon türü (Şarj vs Benzin)</strong> anında aracınıza dönüşür.
+        </p>
+
+        <div class="homescreen-mockup">
+          <div style="text-align:center;">
+            <div class="app-launcher-tile" id="homeIconPreview"></div>
+            <div style="font-size:11.5px; font-weight:700; margin-top:6px;" id="homeIconLabel">Otonom</div>
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:13px; font-weight:800;">Telefon Ana Ekran İkonu</div>
+            <div style="font-size:11.5px; color:var(--text-muted); margin-top:4px; line-height:1.45;">
+              iOS <code style="color:#fff;">CFBundleAlternateIcons</code> & Android <code style="color:#fff;">activity-alias</code> ile gerçek cihazda otomatik değişir.
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:14px;">
+          <div style="font-size:12px; font-weight:800; margin-bottom:8px;">Hızlı Marka & Motor Testi:</div>
+          <div id="sideQuickBrands" style="display:flex; flex-wrap:wrap; gap:7px;"></div>
+        </div>
+      </div>
+
+      <div class="showcase-card" style="font-size:12.5px; line-height:1.6; color:#CBD5E1;">
+        <div style="font-weight:900; color:#FFF; font-size:14px; margin-bottom:6px;">✨ Aktif Süper-Uygulama Modülleri</div>
+        <div>• <strong>Akıllı Rota:</strong> EV araçta DC Şarj (kW, soket), benzinlide Benzinlik (₺/L) ve km mesafesi</div>
+        <div>• <strong>En Yakın Çekici:</strong> Kayar kasa radarı, şeffaf ücret & canlı operatör arama ekranı</div>
+        <div>• <strong>Acil Kaza 112:</strong> Tek tuş 112 sesli arama + açık GPS, kan grubu & EV yüksek voltaj uyarısı</div>
+        <div>• <strong>En Küçük Cıvatasına Kadar:</strong> Car.info + OEM bijon/karter/kapak torkları (Nm) & VIN çözücü</div>
+        <div>• <strong>P2P Araç Kiralama:</strong> Harita üstü fiyat pinleri, saatlik/günlük kiralama hesaplayıcı</div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="/data.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

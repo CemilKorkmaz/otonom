@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Otonom</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleName</key>
+	<string>otonom</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tel</string>
+		<string>https</string>
+	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>En yakın çekiciyi bulmak, 112 acil durum konumu paylaşmak ve yol üstü şarj/benzin istasyonlarını göstermek için konum izni gerekir.</string>
+	<key>CFBundleIcons</key>
+	<dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconFiles</key>
+			<array>
+				<string>AppIcon</string>
+			</array>
+		</dict>
+		<key>CFBundleAlternateIcons</key>
+		<dict>
+			<key>tesla</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array><string>IconTesla</string></array>
+			</dict>
+			<key>bmw</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array><string>IconBmw</string></array>
+			</dict>
+			<key>togg</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array><string>IconTogg</string></array>
+			</dict>
+			<key>mercedes</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array><string>IconMercedes</string></array>
+			</dict>
+			<key>porsche</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array><string>IconPorsche</string></array>
+			</dict>
+			<key>audi</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array><string>IconAudi</string></array>
+			</dict>
+		</dict>
+	</dict>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+</dict>
+</plist>

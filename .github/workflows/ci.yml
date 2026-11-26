@@ -1,0 +1,89 @@
+name: Otonom Android APK Release Builder
+
+on:
+  push:
+    branches: [ "main", "arena/**" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Bootstrap Gradle/Xcode wrapper files while preserving all Otonom code
+        run: |
+          mkdir -p /tmp/otonom-backup/drawable
+          cp pubspec.yaml /tmp/otonom-backup/pubspec.yaml
+          cp analysis_options.yaml /tmp/otonom-backup/analysis_options.yaml
+          cp -r lib /tmp/otonom-backup/lib
+          cp -r test /tmp/otonom-backup/test
+          cp android/app/src/main/AndroidManifest.xml /tmp/otonom-backup/AndroidManifest.xml
+          cp android/app/src/main/kotlin/com/otonom/otonom/MainActivity.kt /tmp/otonom-backup/MainActivity.kt
+          cp android/app/src/main/res/drawable/ic_launcher_*.xml /tmp/otonom-backup/drawable/
+          cp ios/Runner/Info.plist /tmp/otonom-backup/Info.plist
+          cp ios/Runner/AppDelegate.swift /tmp/otonom-backup/AppDelegate.swift
+
+          flutter create --org com.otonom --project-name otonom --platforms=android,ios .
+
+          cp /tmp/otonom-backup/pubspec.yaml pubspec.yaml
+          cp /tmp/otonom-backup/analysis_options.yaml analysis_options.yaml
+          rm -rf lib test
+          cp -r /tmp/otonom-backup/lib lib
+          cp -r /tmp/otonom-backup/test test
+          cp /tmp/otonom-backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          rm -rf android/app/src/main/kotlin android/app/src/main/java
+          mkdir -p android/app/src/main/kotlin/com/otonom/otonom
+          cp /tmp/otonom-backup/MainActivity.kt android/app/src/main/kotlin/com/otonom/otonom/MainActivity.kt
+          mkdir -p android/app/src/main/res/drawable
+          cp /tmp/otonom-backup/drawable/ic_launcher_*.xml android/app/src/main/res/drawable/
+          cp /tmp/otonom-backup/Info.plist ios/Runner/Info.plist
+          cp /tmp/otonom-backup/AppDelegate.swift ios/Runner/AppDelegate.swift
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Run Flutter static analysis
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Run Flutter unit & widget tests
+        run: flutter test
+
+      - name: Build Installable Android Release APK
+        run: |
+          flutter build apk --release
+          cp build/app/outputs/flutter-apk/app-release.apk otonom-v1.0.0-android.apk
+          ls -lh otonom-v1.0.0-android.apk
+
+      - name: Upload APK Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: otonom-v1.0.0-android-apk
+          path: otonom-v1.0.0-android.apk
+
+      - name: Publish GitHub Release with Direct APK Download
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view v1.0.0 >/dev/null 2>&1; then
+            gh release upload v1.0.0 otonom-v1.0.0-android.apk --clobber
+          else
+            gh release create v1.0.0 otonom-v1.0.0-android.apk \
+              --target "${{ github.sha }}" \
+              --title "Otonom v1.0.0 — Android Kurulum Paketi (APK)" \
+              --notes "Otonom v1.0.0 Android sürümü! Telefonunuza doğrudan **otonom-v1.0.0-android.apk** dosyasını indirip kurabilirsiniz. Garajım sekmesinden Tesla, BMW M, Togg, Mercedes-AMG, Porsche veya Audi seçtiğinizde hem uygulama teması/rota istasyonları hem de telefonunuzun ana ekranındaki Otonom logosu otomatik olarak değişir."
+          fi
